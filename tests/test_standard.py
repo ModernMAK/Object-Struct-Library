@@ -33,8 +33,8 @@ class MyTestCase(unittest.TestCase):
             i = c()  # create instance
             self.assertEqual(i.format, c.format)
             self.assertEqual(i.args, c.args)
-            self.assertEqual(i.size, c.size)
-            self.assertEqual(i.min_size, c.min_size)
+            self.assertEqual(i.fixed_size, c.fixed_size)
+            # self.assertEqual(i.min_size, c.min_size)
             self.assertEqual(i.byte_flags, c.byte_flags)
             if code in ['p']:  # not supported
                 continue
@@ -55,9 +55,9 @@ class MyTestCase(unittest.TestCase):
 
             struct_i, struct_c = Struct(i.format), Struct(c.format)
             if d is None:
-                struct_i_dp, struct_c_dp = i.pack(), c.pack()
+                struct_i_dp, struct_c_dp = struct_i.pack(), struct_c.pack()
             else:
-                struct_i_dp, struct_c_dp = i.pack(d), c.pack(d)
+                struct_i_dp, struct_c_dp = struct_i.pack(d), struct_c.pack(d)
             self.assertEqual(i_dp, struct_i_dp)
             self.assertEqual(c_dp, struct_c_dp)
             self.assertEqual(struct_i_dp, struct_c_dp)

@@ -2,7 +2,7 @@ import re
 from struct import Struct
 from typing import Tuple, Iterable, Optional, BinaryIO, Union
 
-from core import ObjStructField, ByteLayoutFlag
+from core import ObjStruct, ByteLayoutFlag
 from util import hybridmethod
 
 STANDARD_BOSA_MARKS = r"@=<>!"  # Byte Order, Size, Alignment
@@ -46,6 +46,10 @@ def _unpack_from(layout: Struct, buffer, offset: int = 0) -> Tuple:
         return layout.unpack_from(buffer, offset)
 
 
+def _unpack_from_with_len(layout: Struct, buffer, offset: int = 0) -> Tuple[int, Tuple]:
+    return layout.size, _unpack_from(layout, buffer, offset)
+
+
 def _unpack_stream(layout: Struct, buffer: BinaryIO) -> Tuple:
     stream_buffer = buffer.read(layout.size)
     return layout.unpack(stream_buffer)
@@ -64,7 +68,9 @@ def _iter_unpack(layout: Struct, buffer) -> Iterable[Tuple]:
         return layout.iter_unpack(buffer)
 
 
-__struct_regex = re.compile(rf"(?:([0-9]*)([{STANDARD_FMT_MARKS}]))")  # 'x' is excluded because it is padding
+__struct_regex = re.compile(rf"([0-9]*)([{STANDARD_FMT_MARKS}])")  # 'x' is excluded because it is padding
+
+
 def _count_args(fmt: str) -> int:
     count = 0
     pos = 0
@@ -82,11 +88,11 @@ def _count_args(fmt: str) -> int:
             pos = match.span()[1]
     return count
 
-class _StandardStruct(ObjStructField):
+
+class _StandardStruct(ObjStruct):
     """
     A representation of a standard struct.Struct
     """
-    IS_STANDARD_STRUCT = True
     __DEF_FLAG = ByteLayoutFlag.NativeSize | ByteLayoutFlag.NativeEndian | ByteLayoutFlag.NativeAlignment
     __BLM_FLAG_MAP = {
         "@": ByteLayoutFlag.NativeSize | ByteLayoutFlag.NativeEndian | ByteLayoutFlag.NativeAlignment,
@@ -143,22 +149,12 @@ class _StandardStruct(ObjStructField):
 
     @hybridmethod
     @property
-    def size(self) -> int:
+    def fixed_size(self) -> int:
         return self.DEFAULT_LAYOUT.size
 
-    @size.instancemethod
+    @fixed_size.instancemethod
     @property
-    def size(self) -> int:
-        return self.__layout.size
-
-    @hybridmethod
-    @property
-    def min_size(self) -> int:
-        return self.DEFAULT_LAYOUT.size
-
-    @min_size.instancemethod
-    @property
-    def min_size(self) -> int:
+    def fixed_size(self) -> int:
         return self.__layout.size
 
     @property
@@ -215,6 +211,9 @@ class _StandardStruct(ObjStructField):
     def unpack_from(self, buffer, offset: int = 0) -> Tuple:
         return _unpack_from(self.__layout, buffer, offset)
 
+    def unpack_from_with_len(self, buffer, offset: int = 0) -> Tuple[int, Tuple]:
+        return _unpack_from_with_len(self.__layout, buffer, offset)
+
     @hybridmethod
     def unpack_stream(self, buffer) -> Tuple:
         return _unpack_from(self.DEFAULT_LAYOUT, buffer)
@@ -232,9 +231,7 @@ class _StandardStruct(ObjStructField):
         return _iter_unpack(self.__layout, buffer)
 
 
-class StructWrapper(ObjStructField):
-    IS_STANDARD_STRUCT = True
-
+class StructWrapper(ObjStruct):
     def __init__(self, s: Union[str, Struct]):
         if isinstance(s, str):
             s = Struct(s)
@@ -242,11 +239,7 @@ class StructWrapper(ObjStructField):
         self.__args = _count_args(s.format)
 
     @property
-    def size(self) -> int:
-        return self.__layout.size
-
-    @property
-    def min_size(self) -> int:
+    def fixed_size(self) -> int:
         return self.__layout.size
 
     @property
@@ -270,7 +263,10 @@ class StructWrapper(ObjStructField):
         return _unpack(self.__layout, buffer)
 
     def unpack_from(self, buffer, offset: int = 0) -> Tuple:
-        return _unpack_stream(self.__layout, buffer)
+        return _unpack_from(self.__layout, buffer, offset)
+
+    def unpack_from_with_len(self, buffer, offset: int = 0) -> Tuple[int, Tuple]:
+        return _unpack_from_with_len(self.__layout, buffer, offset)
 
     def iter_unpack(self, buffer) -> Iterable[Tuple]:
         return _iter_unpack(self.__layout, buffer)
@@ -575,4 +571,3 @@ struct_code2class["L"] = UInt32
 # ALIASES
 
 Byte, SByte, Short, UShort, Int, UInt, Long, ULong, Half, Float, Double = UInt8, Int8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Float16, Float32, Float64
-

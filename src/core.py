@@ -1,23 +1,10 @@
-from abc import ABC
 from enum import Flag
-from typing import Protocol, Tuple, Iterable, List, BinaryIO
+from io import BytesIO
+from mmap import mmap
+from typing import Tuple, Iterable, List, BinaryIO, Union, Type, Optional
 
-
-class ObjStructLike(Protocol):
-    def pack(self, *args) -> bytes:
-        ...
-
-    def pack_into(self, buffer, *args, offset: int = 0):
-        ...
-
-    def iter_unpack(self, buffer):
-        ...
-
-    def unpack(self, string):
-        ...
-
-    def unpack_from(self, buffer, offset=0):
-        ...
+BufferApiType = Union[bytes, bytearray, mmap]
+Buffer = Union[BinaryIO, BufferApiType]
 
 
 class ByteLayoutFlag(Flag):
@@ -34,19 +21,12 @@ class ByteLayoutFlag(Flag):
 
 
 class ObjStruct:
+    # Things of note; we don't use format anymore; because that couples it to a string, which we'd preferably use a converter-mapping for
+    # Also we now only use one size; fixed_size, which is the fixed_size of a variable_size structure or the total size in a fixed_size structure
 
     @property
-    def format(self) -> str:
-        raise NotImplementedError
-
-    @property
-    def size(self) -> int:
+    def fixed_size(self) -> int:
         """ The fixed size of the buffer """
-        raise NotImplementedError
-
-    @property
-    def min_size(self) -> int:
-        """ The minimum size of the buffer """
         raise NotImplementedError
 
     @property
@@ -64,24 +44,19 @@ class ObjStruct:
     def pack(self, *args) -> bytes:
         raise NotImplementedError
 
-    def pack_into(self, buffer, *args, offset: int = 0) -> int:
+    def pack_stream(self, buffer: BinaryIO, *args) -> int:
         raise NotImplementedError
 
-    def pack_stream(self, buffer:BinaryIO, *args) -> int:
+    def pack_into(self, buffer, *args, offset: int = None) -> int:
         raise NotImplementedError
 
-    def unpack(self, buffer) -> Tuple:  # known case of _struct.Struct.unpack
-        """
-        Return a tuple containing unpacked values.
-
-        Unpack according to the format string Struct.format. The buffer's size
-        in bytes must be Struct.size.
-
-        See help(struct) for more on format strings.
-        """
+    def unpack(self, buffer) -> Tuple:
         raise NotImplementedError
 
-    def unpack_from(self, buffer, offset: int = 0) -> Tuple:  # known case of _struct.Struct.unpack_from
+    def unpack_stream(self, buffer: BinaryIO) -> Tuple:
+        raise NotImplementedError
+
+    def unpack_from(self, buffer, offset: int = None) -> Tuple:  # known case of _struct.Struct.unpack_from
         """
         Return a tuple containing unpacked values.
 
@@ -94,172 +69,242 @@ class ObjStruct:
         """
         raise NotImplementedError
 
-    def var_unpack_from(self, buffer, offset:int = 0) -> Tuple[int,Tuple]:
+    def unpack_from_with_len(self, buffer, offset: int = None) -> Tuple[int, Tuple]:
         raise NotImplementedError
 
     def iter_unpack(self, buffer) -> Iterable[Tuple]:
         raise NotImplementedError
 
-    def unpack_stream(self, buffer:BinaryIO) -> Tuple:
+
+class ObjStructHelper(ObjStruct):  # Mixin to simplify functionality for custom structs
+    @property
+    def fixed_size(self) -> int:
         raise NotImplementedError
-
-
-class ObjStructField(ObjStruct, ABC):
-    DEFAULT_CODE = None
-    IS_VAR_SIZE = None
-    IS_STANDARD_STRUCT = None
-
-
-class NestedStruct(ObjStruct):
-    def __init__(self, structures:List[ObjStruct] = None):
-        self.__sub_layouts: List[ObjStruct] = structures or []
-        self.__args = sum(s.args for s in self.__sub_layouts)
-        self.__is_var = any(s.is_var_size for s in self.__sub_layouts)
-        self.__standard = all(hasattr(s, "IS_STANDARD_STRUCT") and s.IS_STANDARD_STRUCT for s in self.__sub_layouts)
-        if self.__is_var:
-            self.__size = sum(s.min_size for s in self.__sub_layouts)
-        else:
-            self.__size = sum(s.size for s in self.__sub_layouts)
-
-    @property
-    def size(self) -> int:
-        if self.__is_var:
-            raise TypeError("Variable sized structures do not have a fixed size!")
-        return self.__size
-
-    @property
-    def min_size(self) -> int:
-        return self.__size
-
-    @property
-    def format(self) -> str:
-        raise NotImplementedError  # TODO, how to handle format
 
     @property
     def is_var_size(self) -> bool:
-        return self.__is_var
+        raise NotImplementedError
+
+    @property
+    def args(self) -> int:
+        raise NotImplementedError
+
+    def _arg_count_mismatch(self, *args) -> bool:
+        return len(args) != self.args
+
+    def _buffer_too_small(self, buffer: BufferApiType, offset: int = None) -> bool:
+        size = len(buffer) - (offset or 0)
+        return size < self.fixed_size
+
+    def _arg_types(self) -> Optional[Union[Type, Tuple[Type, ...]]]:
+        return None
+
+    def _arg_type_mismatch(self, *args) -> bool:
+        types = self._arg_types()
+        if types is None:
+            return False
+        # if isinstance(types, list):
+        #     msg = f"arguments for '{cls.__name__}' must be an object from these types; {repr([t.__name__ for t in type_name])}"
+        # else:
+        #     msg = f"arguments for '{cls.__name__}' must be a {type_name.__name__} object"
+        return any(not isinstance(a, types) for a in args)
+
+    def _stream_too_small(self, stream: BinaryIO, offset: int = None) -> bool:
+        if offset:
+            return_to = stream.tell()
+            stream.seek(offset)
+            read = stream.read(self.fixed_size)
+            stream.seek(return_to)
+        else:
+            read = stream.read(self.fixed_size)
+            stream.seek(-self.fixed_size, 1)
+        return len(read) < self.fixed_size
+
+    def _too_small(self, buffer: Buffer, offset: int = None) -> bool:
+        if isinstance(buffer, BinaryIO):
+            return self._stream_too_small(buffer, offset=offset)
+        else:
+            return self._buffer_too_small(buffer, offset=offset)
+
+    def _pack(self, *args) -> bytes:
+        raise NotImplementedError
+
+    def pack(self, *args) -> bytes:
+        if self._arg_count_mismatch(*args):
+            ...  # TODO raise error
+        return self._pack(*args)
+
+    def _pack_into_stream(self, stream: BinaryIO, *args, offset: int = None) -> int:
+        raise NotImplementedError
+
+    def _pack_into_buffer(self, buffer: BufferApiType, *args, offset: int = None) -> int:
+        raise NotImplementedError
+
+    def pack_into(self, buffer: Buffer, *args, offset: int = None) -> int:
+        if self._arg_count_mismatch(*args):
+            ...  # TODO raise error
+        if self._too_small(buffer, offset):
+            ...  # TODO raise error
+        if isinstance(buffer, BinaryIO):
+            return self._pack_into_stream(buffer, *args, offset=offset)
+        else:
+            return self._pack_into_buffer(buffer, *args, offset=offset)
+
+    def _pack_stream(self, buffer: BinaryIO, *args) -> int:
+        raise NotImplementedError
+
+    def pack_stream(self, buffer: BinaryIO, *args) -> int:
+        if self._arg_count_mismatch(*args):
+            ...  # TODO raise error
+        return self._pack_stream(buffer, *args)
+
+    def _unpack_buffer(self, buffer: BufferApiType) -> Tuple[int, Tuple]:
+        raise NotImplementedError
+
+    def _unpack_stream(self, stream: BinaryIO) -> Tuple[int, Tuple]:
+        raise NotImplementedError
+
+    def unpack(self, buffer: Buffer) -> Tuple:
+        if self._too_small(buffer):
+            ...  # TODO raise error
+        if isinstance(buffer, BinaryIO):
+            return self._unpack_stream(buffer)[1]
+        else:
+            return self._unpack_buffer(buffer)
+
+    def unpack_stream(self, buffer: BinaryIO) -> Tuple:
+        return self.unpack_from_with_len(buffer)[1]
+
+    def unpack_stream_with_len(self, buffer: BinaryIO) -> Tuple[int, Tuple]:
+        if self._too_small(buffer):
+            ...  # TODO raise error
+        return self._unpack_stream(buffer)
+
+    def _unpack_from_buffer(self, buffer: BufferApiType, *, offset: int = None) -> Tuple[int, Tuple]:
+        raise NotImplementedError
+
+    def _unpack_from_stream(self, stream: BinaryIO, *, offset: int = None) -> Tuple[int, Tuple]:
+        raise NotImplementedError
+
+    def unpack_from(self, buffer: Buffer, *, offset: int = None) -> Tuple:
+        return self.unpack_from_with_len(buffer, offset)[1]  # most of the time we want this, occasionally we also want bytes read
+
+    def unpack_from_with_len(self, buffer, offset: int = 0) -> Tuple[int, Tuple]:
+        if self._too_small(buffer, offset):
+            ...  # TODO raise error
+        if isinstance(buffer, BinaryIO):
+            return self._unpack_from_stream(buffer, offset=offset)
+        else:
+            return self._unpack_from_buffer(buffer, offset=offset)
+
+    def _iter_unpack_buffer(self, buffer: BufferApiType) -> Iterable[Tuple]:
+        raise NotImplementedError
+
+    def _iter_unpack_stream(self, stream: BinaryIO) -> Iterable[Tuple]:
+        raise NotImplementedError
+
+    def iter_unpack(self, buffer) -> Iterable[Tuple]:
+        if isinstance(buffer, BinaryIO):
+            return self._iter_unpack_stream(buffer)
+        else:
+            return self._iter_unpack_buffer(buffer)
+
+
+class MultiStruct(ObjStructHelper):
+    def __init__(self, *structures: ObjStruct):
+        sub_layouts = structures or []
+        self.__is_var_size = any(s.is_var_size for s in sub_layouts)
+        self.__size = sum(s.fixed_size for s in sub_layouts)
+        self.__args = sum(1 if isinstance(s, MultiStruct) else s.args for s in sub_layouts)
+        self.__sub_layouts: List[Tuple[ObjStruct, bool]] = [(s, isinstance(s, MultiStruct)) for s in sub_layouts]
+
+    @property
+    def fixed_size(self) -> int:
+        return self.__size
+
+    @property
+    def is_var_size(self) -> bool:
+        return self.__is_var_size
+
+    @classmethod
+    def __get_args(cls, s: ObjStruct) -> int:
+        """Gets the # of args for a flat struct, or 1 for a MultiStruct"""
+        return 1 if isinstance(s, MultiStruct) else s.args
 
     @property
     def args(self) -> int:
         return self.__args
 
-    def pack(self, *args) -> bytes:
-        r = bytearray()
-        arg_offset = 0
-        for s in self.__sub_layouts:
-            s_args = args[arg_offset:arg_offset + s.args]
-            arg_offset += s.args
-            s_r = s.pack(s_args)
-            r.extend(s_r)
-        return r
+    def _pack(self, *args) -> bytes:
+        with BytesIO() as buffer:
+            self._pack_stream(buffer, *args)
+        buffer.seek(0)
+        return buffer.read()
 
-    def pack_into(self, buffer, *args, offset: int = 0) -> int:
-        arg_offset = 0
-        if isinstance(buffer,BinaryIO):
-            # same as StructWrapper __pack_into, but optimized for this use-case
-            return_to = buffer.tell()
-            buffer.seek(offset)
-            written = 0
-            for s_layout in self.__sub_layouts:
-                s_args = args[arg_offset:arg_offset + s_layout.args]
-                arg_offset += s_layout.args
-                written += s_layout.pack_stream(buffer,*s_args)
-            buffer.seek(return_to)
-            return written
-        else:
-            buffer_local_offset = 0
-            for s_layout in self.__sub_layouts:
-                s_args = args[arg_offset:arg_offset + s_layout.args]
-                arg_offset += s_layout.args
-                buffer_local_offset += s_layout.pack_into(buffer, offset + buffer_local_offset, *s_args)
-            return buffer_local_offset  # after all writes, should be number of bytes written
-
-    def pack_stream(self, buffer: BinaryIO, *args) -> int:
+    def _pack_into(self, buffer: Buffer, *args, offset: int = None) -> int:
+        arg_off = 0
         written = 0
-        arg_offset = 0
-        for s_layout in self.__sub_layouts:
-            s_args = args[arg_offset:arg_offset + s_layout.args]
-            arg_offset += s_layout.args
-            written += s_layout.pack_stream(buffer, *s_args)
+        for child, nested in self.__sub_layouts:
+            arg_c = 1 if nested else child.args
+            child_args = args[arg_off:arg_off + arg_c]
+            arg_off += arg_c
+            written += child.pack_into(buffer, *child_args, offset=offset)
         return written
 
-    def var_unpack_from(self, buffer, offset:int = 0) -> Tuple[int,Tuple]:
+    def _pack_into_buffer(self, buffer: BufferApiType, *args, offset: int = None) -> int:
+        return self._pack_into(buffer, *args, offset=offset)
+
+    def _pack_into_stream(self, buffer: BinaryIO, *args, offset: int = None) -> int:
+        return self._pack_into(buffer, *args, offset=offset)
+
+    def _pack_stream(self, buffer: BinaryIO, *args) -> int:
+        arg_off = 0
+        written = 0
+        for child, nested in self.__sub_layouts:
+            arg_c = 1 if nested else child.args
+            child_args = args[arg_off:arg_off + arg_c]
+            arg_off += arg_c
+            written += child.pack_stream(buffer, *child_args)
+        return written
+
+    def _unpack_buffer(self, buffer: BufferApiType) -> Tuple[int, Tuple]:
+        return self._unpack(buffer)
+
+    def _unpack_stream(self, stream: BinaryIO) -> Tuple[int, Tuple]:
+        return self._unpack(stream)
+
+    def _unpack(self, buffer: Buffer) -> Tuple[int, Tuple]:
+        total_read = 0
         results = []
-        if isinstance(buffer, BinaryIO):
-            return_to = buffer.tell()
-            buffer.seek(offset)
-            start = buffer.tell()
-            for s_layout in self.__sub_layouts:
-                r = s_layout.unpack_stream(buffer)
+        for child, nested in self.__sub_layouts:
+            read, r = child.unpack(buffer)
+            if nested:
+                results.append(r)
+            else:
                 results.extend(r)
-            end = buffer.tell()
-            buffer.seek(return_to)
-            return end-start, tuple(results)
-        else:
-            buffer_local_offset = 0
-            for s_layout in self.__sub_layouts:
-                read_offset, r = s_layout.var_unpack_from(buffer, offset+buffer_local_offset)
-                buffer_local_offset += read_offset
+            total_read += read
+        return total_read, tuple(results)
+
+    def _unpack_from_buffer(self, buffer: BufferApiType, *, offset: int = None) -> Tuple[int, Tuple]:
+        return self._unpack_from(buffer, offset=offset)
+
+    def _unpack_from_stream(self, stream: BinaryIO, *, offset: int = None) -> Tuple[int, Tuple]:
+        return self._unpack_from(stream, offset=offset)
+
+    def _unpack_from(self, buffer: Buffer, *, offset: int = None) -> Tuple[int, Tuple]:
+        total_read = 0
+        results = []
+        for child, nested in self.__sub_layouts:
+            read, r = child.unpack_from(buffer, offset=offset)
+            if nested:
+                results.append(r)
+            else:
                 results.extend(r)
-            return buffer_local_offset, tuple(results)
+            total_read += read
+        return total_read, tuple(results)
 
-    def unpack(self, buffer) -> Tuple:
-        if len(self.__sub_layouts) == 1:
-            return self.__sub_layouts[0].unpack(buffer)
-        elif self.__is_var:
-            results = []
-            if isinstance(buffer,BinaryIO):
-                for s_layout in self.__sub_layouts:
-                    r = s_layout.unpack_stream(buffer)
-                    results.extend(r)
-            else:
-                buffer_local_offset = 0
-                for s_layout in self.__sub_layouts:
-                    read_offset, r = s_layout.var_unpack_from(buffer, buffer_local_offset)
-                    buffer_local_offset += read_offset
-                    results.extend(r)
-            return tuple(results)
-        else:
-            results = []
-            if isinstance(buffer,BinaryIO):
-                for s_layout in self.__sub_layouts:
-                    r = s_layout.unpack_stream(buffer)
-                    results.extend(r)
-            else:
-                buffer_local_offset = 0
-                for s_layout in self.__sub_layouts:
-                    r = s_layout.unpack_from(buffer, buffer_local_offset)
-                    results.extend(r)
-            return tuple(results)
+    def _iter_unpack_buffer(self, buffer: BufferApiType) -> Iterable[Tuple]:
+        raise NotImplementedError
 
-    def unpack_from(self, buffer, offset: int = 0) -> Tuple:
-        if len(self.__sub_layouts) == 1:
-            return self.__sub_layouts[0].unpack_from(buffer, offset)
-        elif self.__is_var:
-            raise NotImplementedError()  # TODO, need to specify an expected buffer size IFF var_size, else we could just use unpack_from
-        else:
-            results = []
-            if isinstance(buffer,BinaryIO):
-                return_to = buffer.tell()
-                buffer.seek(offset)
-                for s_layout in self.__sub_layouts:
-                    r = s_layout.unpack_stream(buffer)
-                    results.extend(r)
-                buffer.seek(return_to)
-            else:
-                buffer_local_offset = 0
-                for s_layout in self.__sub_layouts:
-                    r = s_layout.unpack_from(buffer, buffer_local_offset+offset)
-                    results.extend(r)
-            return tuple(results)
-
-    def iter_unpack(self, buffer) -> Iterable[Tuple]:
-        buffer_offset = 0
-        if isinstance(buffer,BinaryIO):
-            while True:           # TODO add a has_data function
-                yield self.unpack_stream(buffer)
-        else:
-            while buffer_offset < len(buffer):
-                yield self.unpack_from(buffer,buffer_offset)
-
-
+    def _iter_unpack_stream(self, stream: BinaryIO) -> Iterable[Tuple]:
+        raise NotImplementedError
