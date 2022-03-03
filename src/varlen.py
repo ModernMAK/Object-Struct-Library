@@ -3,6 +3,7 @@ from struct import Struct
 from typing import BinaryIO, Tuple, Iterable, Union
 
 from core import ObjStructHelper, ObjStruct, BufferApiType
+from error import StructVarBufferTooSmallError
 
 
 class VarLenBytes(ObjStructHelper):
@@ -71,7 +72,7 @@ class VarLenBytes(ObjStructHelper):
             read, (size,) = self.__size_layout.unpack_from_with_len(stream, total_read)
             r = stream.read(size)
             if len(r) != size:
-                ...  # TODO raise error
+                raise StructVarBufferTooSmallError("_unpack_stream", size, len(r))
             total_read += read + size
             results.append(r)
         return total_read, tuple(results)

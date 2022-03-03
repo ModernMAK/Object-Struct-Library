@@ -1,4 +1,5 @@
 import unittest
+from io import BytesIO
 from struct import Struct
 import standard as std
 
@@ -70,6 +71,82 @@ class MyTestCase(unittest.TestCase):
             else:
                 self.assertEqual(struct_i_du[0], d)
                 self.assertEqual(struct_c_du[0], d)
+
+    def do_padding_cls(self):
+        cls = std.Padding
+        cls_buffers = (_.to_bytes(1, byteorder="little") for _ in range(255))
+
+        r = cls.pack()
+        self.assertEqual(r, b"\x00")
+
+        buf = bytearray("\xea")
+        l = cls.pack_into(buf)
+        self.assertEqual(l, 1)
+        self.assertEqual(buf, "\x00")
+
+        buf = bytearray("\xbe\xaf")
+        l = cls.pack_into(buf,offset=1)
+        self.assertEqual(l, 1)
+        self.assertEqual(buf, "\xbe\x00")
+
+        for buf in cls_buffers:
+            r = cls.unpack(buf)
+            self.assertEqual(r, ())
+
+            l, r = cls.unpack_with_len(buf)
+            self.assertEqual(l, 1)
+            self.assertEqual(r, ())
+
+            l, r = cls.unpack_from_with_len(buf)
+            self.assertEqual(l, 1)
+            self.assertEqual(r, ())
+
+            l, r = cls.unpack_from_with_len(buf, offset=0)
+            self.assertEqual(l, 1)
+            self.assertEqual(r, ())
+
+            r = cls.unpack_from(buf)
+            self.assertEqual(r, ())
+
+            r = cls.unpack_from(buf, offset=0)
+            self.assertEqual(r, ())
+
+        for buf in cls_buffers:
+            with BytesIO(buf) as s:
+                r = cls.unpack(s)
+                self.assertEqual(r, ())
+                s.seek(0)
+
+                r = cls.unpack_with_len(s)
+                self.assertEqual(r, ())
+                s.seek(0)
+
+                l, r = cls.unpack_from_with_len(s)
+                self.assertEqual(l, 1)
+                self.assertEqual(r, ())
+                s.seek(0)
+
+                l, r = cls.unpack_from_with_len(s, offset=0)
+                self.assertEqual(l, 1)
+                self.assertEqual(r, ())
+                s.seek(0)
+
+                r = cls.unpack_from(s)
+                self.assertEqual(r, ())
+                s.seek(0)
+
+                r = cls.unpack_from(s, offset=0)
+                self.assertEqual(r, ())
+                s.seek(0)
+
+                l, r = cls.unpack_stream_with_len(s)
+                self.assertEqual(l, 1)
+                self.assertEqual(r, ())
+                s.seek(0)
+
+                r = cls.unpack_stream(s)
+                self.assertEqual(r, ())
+                s.seek(0)
 
 
 if __name__ == '__main__':

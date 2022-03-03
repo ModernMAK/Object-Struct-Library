@@ -2,7 +2,7 @@ import re
 from struct import Struct
 from typing import Tuple, Iterable, Optional, BinaryIO, Union
 
-from core import ObjStruct, ByteLayoutFlag
+from core import ObjStruct, ByteLayoutFlag, UnpackResult, UnpackLenResult
 from util import hybridmethod
 
 STANDARD_BOSA_MARKS = r"@=<>!"  # Byte Order, Size, Alignment
@@ -28,19 +28,19 @@ def _pack_stream(layout: Struct, buffer: BinaryIO, *args) -> int:
     return buffer.write(result)
 
 
-def _unpack(layout: Struct, buffer) -> Tuple:
+def _unpack(layout: Struct, buffer) -> UnpackResult:
     if isinstance(buffer, BinaryIO):
         buffer = buffer.read(layout.size)
     return layout.unpack(buffer)
 
 
-def _unpack_with_len(layout: Struct, buffer) -> Tuple[int, Tuple]:
+def _unpack_with_len(layout: Struct, buffer) -> UnpackLenResult:
     if isinstance(buffer, BinaryIO):
         buffer = buffer.read(layout.size)
     return layout.size, layout.unpack(buffer)
 
 
-def _unpack_from(layout: Struct, buffer, offset: int = 0) -> Tuple:
+def _unpack_from(layout: Struct, buffer, offset: int = 0) -> UnpackResult:
     if isinstance(buffer, BinaryIO):
         return_to = buffer.tell()
         buffer.seek(offset)
@@ -52,16 +52,16 @@ def _unpack_from(layout: Struct, buffer, offset: int = 0) -> Tuple:
         return layout.unpack_from(buffer, offset)
 
 
-def _unpack_from_with_len(layout: Struct, buffer, offset: int = 0) -> Tuple[int, Tuple]:
+def _unpack_from_with_len(layout: Struct, buffer, offset: int = 0) -> UnpackLenResult:
     return layout.size, _unpack_from(layout, buffer, offset)
 
 
-def _unpack_stream(layout: Struct, buffer: BinaryIO) -> Tuple:
+def _unpack_stream(layout: Struct, buffer: BinaryIO) -> UnpackResult:
     stream_buffer = buffer.read(layout.size)
     return layout.unpack(stream_buffer)
 
 
-def _unpack_stream_with_len(layout: Struct, buffer: BinaryIO) -> Tuple[int, Tuple]:
+def _unpack_stream_with_len(layout: Struct, buffer: BinaryIO) -> UnpackLenResult:
     stream_buffer = buffer.read(layout.size)
     return layout.size, layout.unpack(stream_buffer)
 
@@ -100,7 +100,7 @@ def _count_args(fmt: str) -> int:
     return count
 
 
-class _StandardStruct(ObjStruct):
+class StandardStruct(ObjStruct):
     """
     A representation of a standard struct.Struct
     """
@@ -191,59 +191,59 @@ class _StandardStruct(ObjStruct):
         return self.__layout.pack(*args)
 
     @hybridmethod
-    def pack_into(self, buffer, offset: int, *args) -> int:
-        return _pack_into(self.DEFAULT_LAYOUT, buffer, *args, offset)
+    def pack_into(cls, buffer, *args, offset: int = None) -> int:
+        return _pack_into(cls.DEFAULT_LAYOUT, buffer, *args, offset)
 
-    @pack.instancemethod
-    def pack_into(self, buffer, offset: int, *args) -> int:
+    @pack_into.instancemethod
+    def pack_into(self, buffer, *args, offset: int = None) -> int:
         return _pack_into(self.__layout, buffer, *args, offset)
 
     @hybridmethod
     def pack_stream(self, buffer: BinaryIO, *args) -> int:
         return _pack_stream(self.DEFAULT_LAYOUT, buffer, *args)
 
-    @pack.instancemethod
+    @pack_stream.instancemethod
     def pack_stream(self, buffer: BinaryIO, *args) -> int:
         return _pack_stream(self.__layout, buffer, *args)
 
     @hybridmethod
-    def unpack(self, buffer) -> Tuple:
+    def unpack(self, buffer) -> UnpackResult:
         return _unpack(self.DEFAULT_LAYOUT, buffer)
 
     @unpack.instancemethod
-    def unpack(self, buffer) -> Tuple:
+    def unpack(self, buffer) -> UnpackResult:
         return _unpack(self.__layout, buffer)
 
     @hybridmethod
-    def unpack_with_len(self, buffer) -> Tuple[int, Tuple]:
+    def unpack_with_len(self, buffer) -> UnpackLenResult:
         return _unpack_with_len(self.DEFAULT_LAYOUT, buffer)
 
     @unpack_with_len.instancemethod
-    def unpack_with_len(self, buffer) -> Tuple[int, Tuple]:
+    def unpack_with_len(self, buffer) -> UnpackLenResult:
         return _unpack_with_len(self.__layout, buffer)
 
     @hybridmethod
-    def unpack_from(self, buffer, offset: int = 0) -> Tuple:
+    def unpack_from(self, buffer, offset: int = 0) -> UnpackResult:
         return _unpack_from(self.DEFAULT_LAYOUT, buffer, offset)
 
-    @unpack.instancemethod
-    def unpack_from(self, buffer, offset: int = 0) -> Tuple:
+    @unpack_from.instancemethod
+    def unpack_from(self, buffer, offset: int = 0) -> UnpackResult:
         return _unpack_from(self.__layout, buffer, offset)
 
     @hybridmethod
-    def unpack_from_with_len(self, buffer, offset: int = 0) -> Tuple[int, Tuple]:
+    def unpack_from_with_len(self, buffer, offset: int = 0) -> UnpackLenResult:
         return _unpack_from_with_len(self.DEFAULT_LAYOUT, buffer, offset)
 
     @unpack_from_with_len.instancemethod
-    def unpack_from_with_len(self, buffer, offset: int = 0) -> Tuple[int, Tuple]:
+    def unpack_from_with_len(self, buffer, offset: int = 0) -> UnpackLenResult:
         return _unpack_from_with_len(self.__layout, buffer, offset)
 
     @hybridmethod
-    def unpack_stream(self, buffer) -> Tuple:
-        return _unpack_from(self.DEFAULT_LAYOUT, buffer)
+    def unpack_stream(cls, buffer) -> UnpackResult:
+        return _unpack_from(cls.DEFAULT_LAYOUT, buffer)
 
-    @unpack.instancemethod
-    def unpack_stream(self, buffer) -> Tuple:
+    @unpack_stream.instancemethod
+    def unpack_stream(self, buffer) -> UnpackResult:
         return _unpack_from(self.__layout, buffer)
 
     @hybridmethod
@@ -255,11 +255,11 @@ class _StandardStruct(ObjStruct):
         return _iter_unpack(self.__layout, buffer)
 
     @hybridmethod
-    def unpack_stream_with_len(self, buffer) -> Tuple[int, Tuple]:
+    def unpack_stream_with_len(self, buffer) -> UnpackLenResult:
         return _unpack_stream_with_len(self.DEFAULT_LAYOUT, buffer)
 
     @unpack_stream_with_len.instancemethod
-    def unpack_stream_with_len(self, buffer) -> Tuple[int, Tuple]:
+    def unpack_stream_with_len(self, buffer) -> UnpackLenResult:
         return _unpack_stream_with_len(self.__layout, buffer)
 
 
@@ -291,22 +291,25 @@ class StructWrapper(ObjStruct):
     def pack_stream(self, buffer: BinaryIO, *args) -> int:
         return _pack_stream(self.__layout, buffer, *args)
 
-    def unpack(self, buffer) -> Tuple:
+    def unpack(self, buffer) -> UnpackResult:
         return _unpack(self.__layout, buffer)
 
-    def unpack_from(self, buffer, offset: int = 0) -> Tuple:
+    def unpack_with_len(self, buffer) -> UnpackLenResult:
+        return _unpack_with_len(self.__layout, buffer)
+
+    def unpack_from(self, buffer, offset: int = 0) -> UnpackResult:
         return _unpack_from(self.__layout, buffer, offset)
 
-    def unpack_from_with_len(self, buffer, offset: int = 0) -> Tuple[int, Tuple]:
+    def unpack_from_with_len(self, buffer, offset: int = 0) -> UnpackLenResult:
         return _unpack_from_with_len(self.__layout, buffer, offset)
 
     def iter_unpack(self, buffer) -> Iterable[Tuple]:
         return _iter_unpack(self.__layout, buffer)
 
-    def unpack_stream(self, buffer: BinaryIO) -> Tuple:
+    def unpack_stream(self, buffer: BinaryIO) -> UnpackResult:
         return _unpack_stream(self.__layout, buffer)
 
-    def unpack_stream_with_len(self, buffer) -> Tuple[int, Tuple]:
+    def unpack_stream_with_len(self, buffer) -> UnpackLenResult:
         return _unpack_stream_with_len(self.__layout, buffer)
 
     @property
@@ -314,7 +317,7 @@ class StructWrapper(ObjStruct):
         return self.__layout.format
 
 
-class Padding(_StandardStruct):
+class Padding(StandardStruct):
     """ 
     Padding Byte(s) 
     
@@ -343,7 +346,7 @@ class Padding(_StandardStruct):
         return 0
 
 
-class Char(_StandardStruct):
+class Char(StandardStruct):
     DEFAULT_CODE = "c"
 
     __DEFAULT_LAYOUT = Struct("c")
@@ -357,7 +360,7 @@ class Char(_StandardStruct):
         super().__init__(repeat, "c", byte_layout_mark)
 
 
-class Int8(_StandardStruct):
+class Int8(StandardStruct):
     DEFAULT_CODE = "b"
 
     __DEFAULT_LAYOUT = Struct("b")
@@ -371,7 +374,7 @@ class Int8(_StandardStruct):
         super().__init__(repeat, "b", byte_layout_mark)
 
 
-class UInt8(_StandardStruct):
+class UInt8(StandardStruct):
     DEFAULT_CODE = "B"
 
     __DEFAULT_LAYOUT = Struct("B")
@@ -385,7 +388,7 @@ class UInt8(_StandardStruct):
         super().__init__(repeat, "B", byte_layout_mark)
 
 
-class Boolean(_StandardStruct):
+class Boolean(StandardStruct):
     DEFAULT_CODE = "?"
 
     __DEFAULT_LAYOUT = Struct("?")
@@ -399,7 +402,7 @@ class Boolean(_StandardStruct):
         super().__init__(repeat, "?", byte_layout_mark)
 
 
-class Int16(_StandardStruct):
+class Int16(StandardStruct):
     DEFAULT_CODE = "h"
 
     __DEFAULT_LAYOUT = Struct("h")
@@ -413,7 +416,7 @@ class Int16(_StandardStruct):
         super().__init__(repeat, "h", byte_layout_mark)
 
 
-class UInt16(_StandardStruct):
+class UInt16(StandardStruct):
     DEFAULT_CODE = "H"
 
     __DEFAULT_LAYOUT = Struct("H")
@@ -427,7 +430,7 @@ class UInt16(_StandardStruct):
         super().__init__(repeat, "H", byte_layout_mark)
 
 
-class Int32(_StandardStruct):
+class Int32(StandardStruct):
     DEFAULT_CODE = "i"  # l
 
     __DEFAULT_LAYOUT = Struct("i")
@@ -441,7 +444,7 @@ class Int32(_StandardStruct):
         super().__init__(repeat, "i", byte_layout_mark)
 
 
-class UInt32(_StandardStruct):
+class UInt32(StandardStruct):
     DEFAULT_CODE = "I"  # L
 
     __DEFAULT_LAYOUT = Struct("I")
@@ -455,7 +458,7 @@ class UInt32(_StandardStruct):
         super().__init__(repeat, "I", byte_layout_mark)
 
 
-class Int64(_StandardStruct):
+class Int64(StandardStruct):
     DEFAULT_CODE = "q"  # l
 
     __DEFAULT_LAYOUT = Struct("q")
@@ -469,7 +472,7 @@ class Int64(_StandardStruct):
         super().__init__(repeat, "q", byte_layout_mark)
 
 
-class UInt64(_StandardStruct):
+class UInt64(StandardStruct):
     DEFAULT_CODE = "Q"  # L
 
     __DEFAULT_LAYOUT = Struct("Q")
@@ -484,7 +487,7 @@ class UInt64(_StandardStruct):
 
 
 # C Size-Type
-class SSizeT(_StandardStruct):
+class SSizeT(StandardStruct):
     DEFAULT_CODE = "n"
 
     __DEFAULT_LAYOUT = Struct("n")
@@ -498,7 +501,7 @@ class SSizeT(_StandardStruct):
         super().__init__(repeat, "n", byte_layout_mark)
 
 
-class SizeT(_StandardStruct):
+class SizeT(StandardStruct):
     DEFAULT_CODE = "N"
 
     __DEFAULT_LAYOUT = Struct("N")
@@ -512,7 +515,7 @@ class SizeT(_StandardStruct):
         super().__init__(repeat, "N", byte_layout_mark)
 
 
-class Float16(_StandardStruct):
+class Float16(StandardStruct):
     DEFAULT_CODE = "e"
 
     __DEFAULT_LAYOUT = Struct("e")
@@ -526,7 +529,7 @@ class Float16(_StandardStruct):
         super().__init__(repeat, "e", byte_layout_mark)
 
 
-class Float32(_StandardStruct):
+class Float32(StandardStruct):
     DEFAULT_CODE = "f"
 
     __DEFAULT_LAYOUT = Struct("f")
@@ -540,7 +543,7 @@ class Float32(_StandardStruct):
         super().__init__(repeat, "f", byte_layout_mark)
 
 
-class Float64(_StandardStruct):
+class Float64(StandardStruct):
     DEFAULT_CODE = "d"
 
     __DEFAULT_LAYOUT = Struct("d")
@@ -554,7 +557,7 @@ class Float64(_StandardStruct):
         super().__init__(repeat, "d", byte_layout_mark)
 
 
-class Bytes(_StandardStruct):
+class Bytes(StandardStruct):
     DEFAULT_CODE = "s"
 
     __DEFAULT_LAYOUT = Struct("s")
@@ -568,7 +571,7 @@ class Bytes(_StandardStruct):
         super().__init__(repeat, "s", size)
 
 
-class FixedPascalString(_StandardStruct):
+class FixedPascalString(StandardStruct):
     DEFAULT_CODE = "p"
 
     __DEFAULT_LAYOUT = Struct("p")
@@ -582,7 +585,7 @@ class FixedPascalString(_StandardStruct):
         super().__init__(repeat, "p", size, byte_layout_mark=byte_layout_mark)
 
 
-class CPointer(_StandardStruct):
+class CPointer(StandardStruct):
     DEFAULT_CODE = "P"
 
     __DEFAULT_LAYOUT = Struct("P")
@@ -600,9 +603,10 @@ struct_code2class = {
 }
 for c in [Padding, Char, Int8, UInt8, Bytes, Boolean, Int16, UInt16, Int32, UInt32, Int64, UInt64, SSizeT, SizeT, Float16, Float32, Float64, FixedPascalString, CPointer]:
     struct_code2class[c.DEFAULT_CODE] = c
+# Struct allows l/L to substitute for Int32
 struct_code2class["l"] = Int32
 struct_code2class["L"] = UInt32
 
 # ALIASES
-
+# Int / Long can also be known as Long / LongLong; I'm going by C# keywords, but if there is any ambiguity, the underlying types are still available
 Byte, SByte, Short, UShort, Int, UInt, Long, ULong, Half, Float, Double = UInt8, Int8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Float16, Float32, Float64
