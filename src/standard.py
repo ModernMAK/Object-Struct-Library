@@ -34,6 +34,12 @@ def _unpack(layout: Struct, buffer) -> Tuple:
     return layout.unpack(buffer)
 
 
+def _unpack_with_len(layout: Struct, buffer) -> Tuple[int, Tuple]:
+    if isinstance(buffer, BinaryIO):
+        buffer = buffer.read(layout.size)
+    return layout.size, layout.unpack(buffer)
+
+
 def _unpack_from(layout: Struct, buffer, offset: int = 0) -> Tuple:
     if isinstance(buffer, BinaryIO):
         return_to = buffer.tell()
@@ -53,6 +59,11 @@ def _unpack_from_with_len(layout: Struct, buffer, offset: int = 0) -> Tuple[int,
 def _unpack_stream(layout: Struct, buffer: BinaryIO) -> Tuple:
     stream_buffer = buffer.read(layout.size)
     return layout.unpack(stream_buffer)
+
+
+def _unpack_stream_with_len(layout: Struct, buffer: BinaryIO) -> Tuple[int, Tuple]:
+    stream_buffer = buffer.read(layout.size)
+    return layout.size, layout.unpack(stream_buffer)
 
 
 def _iter_unpack(layout: Struct, buffer) -> Iterable[Tuple]:
@@ -204,6 +215,14 @@ class _StandardStruct(ObjStruct):
         return _unpack(self.__layout, buffer)
 
     @hybridmethod
+    def unpack_with_len(self, buffer) -> Tuple[int, Tuple]:
+        return _unpack_with_len(self.DEFAULT_LAYOUT, buffer)
+
+    @unpack_with_len.instancemethod
+    def unpack_with_len(self, buffer) -> Tuple[int, Tuple]:
+        return _unpack_with_len(self.__layout, buffer)
+
+    @hybridmethod
     def unpack_from(self, buffer, offset: int = 0) -> Tuple:
         return _unpack_from(self.DEFAULT_LAYOUT, buffer, offset)
 
@@ -211,6 +230,11 @@ class _StandardStruct(ObjStruct):
     def unpack_from(self, buffer, offset: int = 0) -> Tuple:
         return _unpack_from(self.__layout, buffer, offset)
 
+    @hybridmethod
+    def unpack_from_with_len(self, buffer, offset: int = 0) -> Tuple[int, Tuple]:
+        return _unpack_from_with_len(self.DEFAULT_LAYOUT, buffer, offset)
+
+    @unpack_from_with_len.instancemethod
     def unpack_from_with_len(self, buffer, offset: int = 0) -> Tuple[int, Tuple]:
         return _unpack_from_with_len(self.__layout, buffer, offset)
 
@@ -226,9 +250,17 @@ class _StandardStruct(ObjStruct):
     def iter_unpack(self, buffer) -> Iterable[Tuple]:
         return _iter_unpack(self.DEFAULT_LAYOUT, buffer)
 
-    @hybridmethod
+    @iter_unpack.instancemethod
     def iter_unpack(self, buffer) -> Iterable[Tuple]:
         return _iter_unpack(self.__layout, buffer)
+
+    @hybridmethod
+    def unpack_stream_with_len(self, buffer) -> Tuple[int, Tuple]:
+        return _unpack_stream_with_len(self.DEFAULT_LAYOUT, buffer)
+
+    @unpack_stream_with_len.instancemethod
+    def unpack_stream_with_len(self, buffer) -> Tuple[int, Tuple]:
+        return _unpack_stream_with_len(self.__layout, buffer)
 
 
 class StructWrapper(ObjStruct):
@@ -273,6 +305,9 @@ class StructWrapper(ObjStruct):
 
     def unpack_stream(self, buffer: BinaryIO) -> Tuple:
         return _unpack_stream(self.__layout, buffer)
+
+    def unpack_stream_with_len(self, buffer) -> Tuple[int, Tuple]:
+        return _unpack_stream_with_len(self.__layout, buffer)
 
     @property
     def format(self) -> str:

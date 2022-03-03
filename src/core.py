@@ -53,7 +53,13 @@ class ObjStruct:
     def unpack(self, buffer) -> Tuple:
         raise NotImplementedError
 
+    def unpack_with_len(self, buffer) -> Tuple[int, Tuple]:
+        raise NotImplementedError
+
     def unpack_stream(self, buffer: BinaryIO) -> Tuple:
+        raise NotImplementedError
+
+    def unpack_stream_with_len(self, buffer) -> Tuple[int,Tuple]:
         raise NotImplementedError
 
     def unpack_from(self, buffer, offset: int = None) -> Tuple:  # known case of _struct.Struct.unpack_from
@@ -74,6 +80,7 @@ class ObjStruct:
 
     def iter_unpack(self, buffer) -> Iterable[Tuple]:
         raise NotImplementedError
+
 
 
 class ObjStructHelper(ObjStruct):  # Mixin to simplify functionality for custom structs
@@ -165,12 +172,16 @@ class ObjStructHelper(ObjStruct):  # Mixin to simplify functionality for custom 
         raise NotImplementedError
 
     def unpack(self, buffer: Buffer) -> Tuple:
+        return self.unpack_with_len(buffer)[1]
+
+    def unpack_with_len(self, buffer) -> Tuple[int, Tuple]:
         if self._too_small(buffer):
             ...  # TODO raise error
         if isinstance(buffer, BinaryIO):
-            return self._unpack_stream(buffer)[1]
+            return self._unpack_stream(buffer)
         else:
             return self._unpack_buffer(buffer)
+
 
     def unpack_stream(self, buffer: BinaryIO) -> Tuple:
         return self.unpack_from_with_len(buffer)[1]
@@ -211,7 +222,7 @@ class ObjStructHelper(ObjStruct):  # Mixin to simplify functionality for custom 
 
 
 class MultiStruct(ObjStructHelper):
-    def __init__(self, *structures: ObjStruct):
+    def __init__(self, *structures: Union[ObjStruct, Type[ObjStruct]]):
         sub_layouts = structures or []
         self.__is_var_size = any(s.is_var_size for s in sub_layouts)
         self.__size = sum(s.fixed_size for s in sub_layouts)
@@ -268,16 +279,22 @@ class MultiStruct(ObjStructHelper):
         return written
 
     def _unpack_buffer(self, buffer: BufferApiType) -> Tuple[int, Tuple]:
-        return self._unpack(buffer)
-
-    def _unpack_stream(self, stream: BinaryIO) -> Tuple[int, Tuple]:
-        return self._unpack(stream)
-
-    def _unpack(self, buffer: Buffer) -> Tuple[int, Tuple]:
         total_read = 0
         results = []
         for child, nested in self.__sub_layouts:
-            read, r = child.unpack(buffer)
+            read, r = child.unpack_from_with_len(buffer, offset=total_read)
+            if nested:
+                results.append(r)
+            else:
+                results.extend(r)
+            total_read += read
+        return total_read, tuple(results)
+
+    def _unpack_stream(self, stream: BinaryIO) -> Tuple[int, Tuple]:
+        total_read = 0
+        results = []
+        for child, nested in self.__sub_layouts:
+            read, r = child.unpack_stream_with_len(stream)
             if nested:
                 results.append(r)
             else:
@@ -292,10 +309,11 @@ class MultiStruct(ObjStructHelper):
         return self._unpack_from(stream, offset=offset)
 
     def _unpack_from(self, buffer: Buffer, *, offset: int = None) -> Tuple[int, Tuple]:
+        offset = offset or 0
         total_read = 0
         results = []
         for child, nested in self.__sub_layouts:
-            read, r = child.unpack_from(buffer, offset=offset)
+            read, r = child.unpack_from_with_len(buffer, offset=offset+total_read)
             if nested:
                 results.append(r)
             else:
