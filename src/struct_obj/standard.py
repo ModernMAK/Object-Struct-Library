@@ -1,9 +1,8 @@
 import re
-from io import BytesIO
 from struct import Struct
-from typing import Tuple, Iterable, Optional, BinaryIO, Union
+from typing import Tuple, Iterable, Optional, Union
 
-from .core import ObjStruct, ByteLayoutFlag, UnpackResult, UnpackLenResult, BufferStream, BufferStreamTypes
+from .core import StructObj, ByteLayoutFlag, UnpackResult, UnpackLenResult, BufferStream, BufferStreamTypes
 from .util import hybridmethod
 
 STANDARD_BOSA_MARKS = r"@=<>!"  # Byte Order, Size, Alignment
@@ -102,7 +101,7 @@ def _count_args(fmt: str) -> int:
     return count
 
 
-class StandardStruct(ObjStruct):
+class StandardStruct(StructObj):
     """
     A representation of a standard struct.Struct
     """
@@ -170,6 +169,12 @@ class StandardStruct(ObjStruct):
     def fixed_size(self) -> int:
         return self.__layout.size
 
+    @hybridmethod
+    @property
+    def is_var_size(self) -> bool:
+        return False
+
+    @is_var_size.instancemethod
     @property
     def is_var_size(self) -> bool:
         return False
@@ -265,7 +270,7 @@ class StandardStruct(ObjStruct):
         return _unpack_stream_with_len(self.__layout, buffer)
 
 
-class StructWrapper(ObjStruct):
+class StructWrapper(StructObj):
     def __init__(self, s: Union[str, Struct]):
         if isinstance(s, str):
             s = Struct(s)

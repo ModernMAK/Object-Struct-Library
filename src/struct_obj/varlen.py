@@ -1,13 +1,13 @@
 from io import BytesIO
 from struct import Struct
-from typing import BufferStream, Tuple, Iterable, Union
+from typing import Tuple, Iterable, Union
 
-from .core import ObjStructHelper, ObjStruct, BufferApiType
+from .core import StructObjHelper, StructObj, BufferApiType, BufferStream
 from .error import StructVarBufferTooSmallError
 
 
-class VarLenBytes(ObjStructHelper):
-    def __init__(self, size: Union[str, Struct, ObjStruct], repeat_size: int = 1):
+class VarLenBytes(StructObjHelper):
+    def __init__(self, size: Union[str, Struct, StructObj], repeat_size: int = 1):
         if isinstance(size, str):
             size = Struct(size)
 

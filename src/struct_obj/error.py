@@ -1,4 +1,5 @@
 import struct
+from typing import Type
 
 
 class StructError(struct.error):
@@ -14,6 +15,15 @@ class StructPackingError(StructError):
 
     def __str__(self):
         return f"{self.func} expected {self.expected} items for packing (got {self.provided})"
+
+
+class StructNestedPackingError(StructPackingError):
+    def __init__(self, func_name: str, received: Type, *args):
+        super().__init__(func_name, None, None, *args)
+        self.received_type = received
+
+    def __str__(self):
+        return f"{self.func} expects a tuple for nested structures; got {self.received_type}"
 
 
 class StructBufferSizeError(StructError):
