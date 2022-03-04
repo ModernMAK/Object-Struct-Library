@@ -2,7 +2,7 @@ name: Upload to TestPyPI
 
 on:
   release:
-    types: [prereleased]
+    types: [published]
 
 jobs:
   deploy:
