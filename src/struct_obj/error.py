@@ -1,7 +1,7 @@
 import struct
 
 
-class StructError(BaseException):
+class StructError(struct.error):
     ...
 
 

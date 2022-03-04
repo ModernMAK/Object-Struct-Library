@@ -3,12 +3,14 @@ from io import BytesIO
 from mmap import mmap
 from typing import Tuple, Iterable, List, BinaryIO, Union, Type, Optional, Any
 
-from error import StructPackingError, StructOffsetBufferTooSmallError, StructBufferTooSmallError
+from .error import StructPackingError, StructOffsetBufferTooSmallError, StructBufferTooSmallError
 
+BufferStream = Union[BytesIO, BinaryIO]  # TODO, better solution!?
+BufferStreamTypes = (BytesIO, BinaryIO)
 BufferApiType = Union[bytes, bytearray, mmap]
-Buffer = Union[BinaryIO, BufferApiType]
-UnpackResult = Tuple[Any,...]
-UnpackLenResult = Tuple[int,UnpackResult]
+Buffer = Union[BufferStream, BufferApiType]
+UnpackResult = Tuple[Any, ...]
+UnpackLenResult = Tuple[int, UnpackResult]
 
 
 class ByteLayoutFlag(Flag):

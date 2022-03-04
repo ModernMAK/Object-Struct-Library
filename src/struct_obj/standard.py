@@ -1,16 +1,18 @@
 import re
+from io import BytesIO
 from struct import Struct
 from typing import Tuple, Iterable, Optional, BinaryIO, Union
 
-from core import ObjStruct, ByteLayoutFlag, UnpackResult, UnpackLenResult
-from util import hybridmethod
+from .core import ObjStruct, ByteLayoutFlag, UnpackResult, UnpackLenResult, BufferStream, BufferStreamTypes
+from .util import hybridmethod
 
 STANDARD_BOSA_MARKS = r"@=<>!"  # Byte Order, Size, Alignment
 STANDARD_FMT_MARKS = r"xcbB?hHiIlLqQnNefdspP"
 
 
-def _pack_into(layout: Struct, buffer, offset: int, *args) -> int:
-    if isinstance(buffer, BinaryIO):
+def _pack_into(layout: Struct, buffer, *args, offset: int = 0) -> int:
+    # print(buffer, isinstance(buffer, BufferStream), isinstance(buffer,BytesIO),buffer.__class__, issubclass(buffer.__class__,BufferStream))
+    if isinstance(buffer, BufferStreamTypes):
         # We mirror pack_into, but for a stream; offset is always relative to start because of this
         return_to = buffer.tell()
         buffer.seek(offset)
@@ -23,25 +25,25 @@ def _pack_into(layout: Struct, buffer, offset: int, *args) -> int:
         return layout.size
 
 
-def _pack_stream(layout: Struct, buffer: BinaryIO, *args) -> int:
+def _pack_stream(layout: Struct, buffer: BufferStream, *args) -> int:
     result = layout.pack(*args)
     return buffer.write(result)
 
 
 def _unpack(layout: Struct, buffer) -> UnpackResult:
-    if isinstance(buffer, BinaryIO):
+    if isinstance(buffer, BufferStreamTypes):
         buffer = buffer.read(layout.size)
     return layout.unpack(buffer)
 
 
 def _unpack_with_len(layout: Struct, buffer) -> UnpackLenResult:
-    if isinstance(buffer, BinaryIO):
+    if isinstance(buffer, BufferStreamTypes):
         buffer = buffer.read(layout.size)
     return layout.size, layout.unpack(buffer)
 
 
 def _unpack_from(layout: Struct, buffer, offset: int = 0) -> UnpackResult:
-    if isinstance(buffer, BinaryIO):
+    if isinstance(buffer, BufferStreamTypes):
         return_to = buffer.tell()
         buffer.seek(offset)
         stream_buffer = buffer.read(layout.size)
@@ -56,18 +58,18 @@ def _unpack_from_with_len(layout: Struct, buffer, offset: int = 0) -> UnpackLenR
     return layout.size, _unpack_from(layout, buffer, offset)
 
 
-def _unpack_stream(layout: Struct, buffer: BinaryIO) -> UnpackResult:
+def _unpack_stream(layout: Struct, buffer: BufferStream) -> UnpackResult:
     stream_buffer = buffer.read(layout.size)
     return layout.unpack(stream_buffer)
 
 
-def _unpack_stream_with_len(layout: Struct, buffer: BinaryIO) -> UnpackLenResult:
+def _unpack_stream_with_len(layout: Struct, buffer: BufferStream) -> UnpackLenResult:
     stream_buffer = buffer.read(layout.size)
     return layout.size, layout.unpack(stream_buffer)
 
 
 def _iter_unpack(layout: Struct, buffer) -> Iterable[Tuple]:
-    if isinstance(buffer, BinaryIO):
+    if isinstance(buffer, BufferStreamTypes):
         if layout.size == 0:
             raise ValueError("Layout has no size?!")
         while True:
@@ -140,12 +142,12 @@ class StandardStruct(ObjStruct):
 
     @classmethod
     @property
-    def DEFAULT_LAYOUT(self) -> Struct:
+    def DEFAULT_LAYOUT(cls) -> Struct:
         raise NotImplementedError
 
     @classmethod
     @property
-    def DEFAULT_ARGS(self) -> int:
+    def DEFAULT_ARGS(cls) -> int:
         return 1
 
     @hybridmethod
@@ -192,18 +194,18 @@ class StandardStruct(ObjStruct):
 
     @hybridmethod
     def pack_into(cls, buffer, *args, offset: int = None) -> int:
-        return _pack_into(cls.DEFAULT_LAYOUT, buffer, *args, offset)
+        return _pack_into(cls.DEFAULT_LAYOUT, buffer, *args, offset=offset)
 
     @pack_into.instancemethod
     def pack_into(self, buffer, *args, offset: int = None) -> int:
-        return _pack_into(self.__layout, buffer, *args, offset)
+        return _pack_into(self.__layout, buffer, *args, offset=offset)
 
     @hybridmethod
-    def pack_stream(self, buffer: BinaryIO, *args) -> int:
+    def pack_stream(self, buffer: BufferStream, *args) -> int:
         return _pack_stream(self.DEFAULT_LAYOUT, buffer, *args)
 
     @pack_stream.instancemethod
-    def pack_stream(self, buffer: BinaryIO, *args) -> int:
+    def pack_stream(self, buffer: BufferStream, *args) -> int:
         return _pack_stream(self.__layout, buffer, *args)
 
     @hybridmethod
@@ -286,9 +288,9 @@ class StructWrapper(ObjStruct):
         return self.__layout.pack(*args)
 
     def pack_into(self, buffer, *args, offset: int = 0) -> int:
-        return _pack_into(self.__layout, buffer, *args)
+        return _pack_into(self.__layout, buffer, *args, offset=offset)
 
-    def pack_stream(self, buffer: BinaryIO, *args) -> int:
+    def pack_stream(self, buffer: BufferStream, *args) -> int:
         return _pack_stream(self.__layout, buffer, *args)
 
     def unpack(self, buffer) -> UnpackResult:
@@ -306,7 +308,7 @@ class StructWrapper(ObjStruct):
     def iter_unpack(self, buffer) -> Iterable[Tuple]:
         return _iter_unpack(self.__layout, buffer)
 
-    def unpack_stream(self, buffer: BinaryIO) -> UnpackResult:
+    def unpack_stream(self, buffer: BufferStream) -> UnpackResult:
         return _unpack_stream(self.__layout, buffer)
 
     def unpack_stream_with_len(self, buffer) -> UnpackLenResult:
