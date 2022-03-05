@@ -1,16 +1,9 @@
 from enum import Flag
 from io import BytesIO
-from mmap import mmap
-from typing import Tuple, Iterable, List, BinaryIO, Union, Type, Optional, Any
+from typing import Tuple, Iterable, List, Union, Type, Optional
 
 from .error import StructPackingError, StructOffsetBufferTooSmallError, StructBufferTooSmallError, StructNestedPackingError
-
-BufferStream = Union[BytesIO, BinaryIO]  # TODO, better solution!?
-BufferStreamTypes = (BytesIO, BinaryIO)
-BufferApiType = Union[bytes, bytearray, mmap]
-Buffer = Union[BufferStream, BufferApiType]
-UnpackResult = Tuple[Any, ...]
-UnpackLenResult = Tuple[int, UnpackResult]
+from .types import UnpackResult, UnpackLenResult, BufferStream, BufferApiType, Buffer, BufferStreamTypes
 
 
 class ByteLayoutFlag(Flag):
@@ -369,3 +362,4 @@ class MultiStruct(StructObjHelper):
             else:
                 stream.seek(-1, 1)
             yield self._unpack_stream(stream)[1]
+

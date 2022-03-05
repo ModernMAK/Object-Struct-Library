@@ -2,8 +2,9 @@ from io import BytesIO
 from struct import Struct
 from typing import Tuple, Iterable, Union
 
-from .core import StructObjHelper, StructObj, BufferApiType, BufferStream
+from .core import StructObjHelper, StructObj
 from .error import StructVarBufferTooSmallError
+from .types import BufferApiType, BufferStream
 
 
 class VarLenBytes(StructObjHelper):

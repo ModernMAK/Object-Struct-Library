@@ -2,7 +2,8 @@ import re
 from struct import Struct
 from typing import Tuple, Iterable, Optional, Union
 
-from .core import StructObj, ByteLayoutFlag, UnpackResult, UnpackLenResult, BufferStream, BufferStreamTypes
+from .core import StructObj, ByteLayoutFlag
+from .types import UnpackResult, UnpackLenResult, BufferStream, BufferStreamTypes
 from .util import hybridmethod
 
 STANDARD_BOSA_MARKS = r"@=<>!"  # Byte Order, Size, Alignment
