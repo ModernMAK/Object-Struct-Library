@@ -105,3 +105,8 @@ class VarLenBytes(StructObjHelper):
 
     def _iter_unpack_stream(self, stream: BufferStream) -> Iterable[Tuple]:
         raise NotImplementedError
+
+
+__all__ = [
+    "VarLenBytes",
+]

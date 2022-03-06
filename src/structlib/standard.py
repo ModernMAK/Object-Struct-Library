@@ -3,82 +3,14 @@ from struct import Struct
 from typing import Tuple, Iterable, Optional, Union
 
 from .core import StructObj, ByteLayoutFlag
-from .types import UnpackResult, UnpackLenResult, BufferStream, BufferStreamTypes
-from .util import hybridmethod
+from .types import UnpackResult, UnpackLenResult, BufferStream
+from .util import hybridmethod, pack_into, pack_stream, unpack_stream, unpack, unpack_stream_with_len, unpack_with_len, unpack_from, unpack_from_with_len, iter_unpack
 
 STANDARD_BOSA_MARKS = r"@=<>!"  # Byte Order, Size, Alignment
 STANDARD_FMT_MARKS = r"xcbB?hHiIlLqQnNefdspP"
 
 
-def _pack_into(layout: Struct, buffer, *args, offset: int = 0) -> int:
-    # print(buffer, isinstance(buffer, BufferStream), isinstance(buffer,BytesIO),buffer.__class__, issubclass(buffer.__class__,BufferStream))
-    if isinstance(buffer, BufferStreamTypes):
-        # We mirror pack_into, but for a stream; offset is always relative to start because of this
-        return_to = buffer.tell()
-        buffer.seek(offset)
-        result = layout.pack(*args)
-        buffer.write(result)
-        buffer.seek(return_to)
-        return layout.size
-    else:
-        layout.pack_into(buffer, offset, *args)
-        return layout.size
-
-
-def _pack_stream(layout: Struct, buffer: BufferStream, *args) -> int:
-    result = layout.pack(*args)
-    return buffer.write(result)
-
-
-def _unpack(layout: Struct, buffer) -> UnpackResult:
-    if isinstance(buffer, BufferStreamTypes):
-        buffer = buffer.read(layout.size)
-    return layout.unpack(buffer)
-
-
-def _unpack_with_len(layout: Struct, buffer) -> UnpackLenResult:
-    if isinstance(buffer, BufferStreamTypes):
-        buffer = buffer.read(layout.size)
-    return layout.size, layout.unpack(buffer)
-
-
-def _unpack_from(layout: Struct, buffer, offset: int = 0) -> UnpackResult:
-    if isinstance(buffer, BufferStreamTypes):
-        return_to = buffer.tell()
-        buffer.seek(offset)
-        stream_buffer = buffer.read(layout.size)
-        result = layout.unpack(stream_buffer)
-        buffer.seek(return_to)
-        return result
-    else:
-        return layout.unpack_from(buffer, offset)
-
-
-def _unpack_from_with_len(layout: Struct, buffer, offset: int = 0) -> UnpackLenResult:
-    return layout.size, _unpack_from(layout, buffer, offset)
-
-
-def _unpack_stream(layout: Struct, buffer: BufferStream) -> UnpackResult:
-    stream_buffer = buffer.read(layout.size)
-    return layout.unpack(stream_buffer)
-
-
-def _unpack_stream_with_len(layout: Struct, buffer: BufferStream) -> UnpackLenResult:
-    stream_buffer = buffer.read(layout.size)
-    return layout.size, layout.unpack(stream_buffer)
-
-
-def _iter_unpack(layout: Struct, buffer) -> Iterable[Tuple]:
-    if isinstance(buffer, BufferStreamTypes):
-        if layout.size == 0:
-            raise ValueError("Layout has no size?!")
-        while True:
-            stream_buffer = buffer.read(layout.size)
-            if len(stream_buffer) == 0:
-                break
-            yield layout.unpack(stream_buffer)
-    else:
-        return layout.iter_unpack(buffer)
+# Functions for common functionality on builtin structs
 
 
 __struct_regex = re.compile(rf"([0-9]*)([{STANDARD_FMT_MARKS}])")  # 'x' is excluded because it is padding
@@ -140,11 +72,13 @@ class StandardStruct(StructObj):
         """
         return self.__flags
 
+    # noinspection PyPropertyDefinition
     @classmethod
     @property
     def DEFAULT_LAYOUT(cls) -> Struct:
         raise NotImplementedError
 
+    # noinspection PyPropertyDefinition
     @classmethod
     @property
     def DEFAULT_ARGS(cls) -> int:
@@ -200,75 +134,75 @@ class StandardStruct(StructObj):
 
     @hybridmethod
     def pack_into(cls, buffer, *args, offset: int = None) -> int:
-        return _pack_into(cls.DEFAULT_LAYOUT, buffer, *args, offset=offset)
+        return pack_into(cls.DEFAULT_LAYOUT, buffer, *args, offset=offset)
 
     @pack_into.instancemethod
     def pack_into(self, buffer, *args, offset: int = None) -> int:
-        return _pack_into(self.__layout, buffer, *args, offset=offset)
+        return pack_into(self.__layout, buffer, *args, offset=offset)
 
     @hybridmethod
     def pack_stream(self, buffer: BufferStream, *args) -> int:
-        return _pack_stream(self.DEFAULT_LAYOUT, buffer, *args)
+        return pack_stream(self.DEFAULT_LAYOUT, buffer, *args)
 
     @pack_stream.instancemethod
     def pack_stream(self, buffer: BufferStream, *args) -> int:
-        return _pack_stream(self.__layout, buffer, *args)
+        return pack_stream(self.__layout, buffer, *args)
 
     @hybridmethod
     def unpack(self, buffer) -> UnpackResult:
-        return _unpack(self.DEFAULT_LAYOUT, buffer)
+        return unpack(self.DEFAULT_LAYOUT, buffer)
 
     @unpack.instancemethod
     def unpack(self, buffer) -> UnpackResult:
-        return _unpack(self.__layout, buffer)
+        return unpack(self.__layout, buffer)
 
     @hybridmethod
     def unpack_with_len(self, buffer) -> UnpackLenResult:
-        return _unpack_with_len(self.DEFAULT_LAYOUT, buffer)
+        return unpack_with_len(self.DEFAULT_LAYOUT, buffer)
 
     @unpack_with_len.instancemethod
     def unpack_with_len(self, buffer) -> UnpackLenResult:
-        return _unpack_with_len(self.__layout, buffer)
+        return unpack_with_len(self.__layout, buffer)
 
     @hybridmethod
     def unpack_from(self, buffer, offset: int = 0) -> UnpackResult:
-        return _unpack_from(self.DEFAULT_LAYOUT, buffer, offset)
+        return unpack_from(self.DEFAULT_LAYOUT, buffer, offset)
 
     @unpack_from.instancemethod
     def unpack_from(self, buffer, offset: int = 0) -> UnpackResult:
-        return _unpack_from(self.__layout, buffer, offset)
+        return unpack_from(self.__layout, buffer, offset)
 
     @hybridmethod
     def unpack_from_with_len(self, buffer, offset: int = 0) -> UnpackLenResult:
-        return _unpack_from_with_len(self.DEFAULT_LAYOUT, buffer, offset)
+        return unpack_from_with_len(self.DEFAULT_LAYOUT, buffer, offset)
 
     @unpack_from_with_len.instancemethod
     def unpack_from_with_len(self, buffer, offset: int = 0) -> UnpackLenResult:
-        return _unpack_from_with_len(self.__layout, buffer, offset)
+        return unpack_from_with_len(self.__layout, buffer, offset)
 
     @hybridmethod
     def unpack_stream(cls, buffer) -> UnpackResult:
-        return _unpack_from(cls.DEFAULT_LAYOUT, buffer)
+        return unpack_from(cls.DEFAULT_LAYOUT, buffer)
 
     @unpack_stream.instancemethod
     def unpack_stream(self, buffer) -> UnpackResult:
-        return _unpack_from(self.__layout, buffer)
+        return unpack_from(self.__layout, buffer)
 
     @hybridmethod
     def iter_unpack(self, buffer) -> Iterable[Tuple]:
-        return _iter_unpack(self.DEFAULT_LAYOUT, buffer)
+        return iter_unpack(self.DEFAULT_LAYOUT, buffer)
 
     @iter_unpack.instancemethod
     def iter_unpack(self, buffer) -> Iterable[Tuple]:
-        return _iter_unpack(self.__layout, buffer)
+        return iter_unpack(self.__layout, buffer)
 
     @hybridmethod
     def unpack_stream_with_len(self, buffer) -> UnpackLenResult:
-        return _unpack_stream_with_len(self.DEFAULT_LAYOUT, buffer)
+        return unpack_stream_with_len(self.DEFAULT_LAYOUT, buffer)
 
     @unpack_stream_with_len.instancemethod
     def unpack_stream_with_len(self, buffer) -> UnpackLenResult:
-        return _unpack_stream_with_len(self.__layout, buffer)
+        return unpack_stream_with_len(self.__layout, buffer)
 
 
 class StructWrapper(StructObj):
@@ -294,31 +228,31 @@ class StructWrapper(StructObj):
         return self.__layout.pack(*args)
 
     def pack_into(self, buffer, *args, offset: int = 0) -> int:
-        return _pack_into(self.__layout, buffer, *args, offset=offset)
+        return pack_into(self.__layout, buffer, *args, offset=offset)
 
     def pack_stream(self, buffer: BufferStream, *args) -> int:
-        return _pack_stream(self.__layout, buffer, *args)
+        return pack_stream(self.__layout, buffer, *args)
 
     def unpack(self, buffer) -> UnpackResult:
-        return _unpack(self.__layout, buffer)
+        return unpack(self.__layout, buffer)
 
     def unpack_with_len(self, buffer) -> UnpackLenResult:
-        return _unpack_with_len(self.__layout, buffer)
+        return unpack_with_len(self.__layout, buffer)
 
     def unpack_from(self, buffer, offset: int = 0) -> UnpackResult:
-        return _unpack_from(self.__layout, buffer, offset)
+        return unpack_from(self.__layout, buffer, offset)
 
     def unpack_from_with_len(self, buffer, offset: int = 0) -> UnpackLenResult:
-        return _unpack_from_with_len(self.__layout, buffer, offset)
+        return unpack_from_with_len(self.__layout, buffer, offset)
 
     def iter_unpack(self, buffer) -> Iterable[Tuple]:
-        return _iter_unpack(self.__layout, buffer)
+        return iter_unpack(self.__layout, buffer)
 
     def unpack_stream(self, buffer: BufferStream) -> UnpackResult:
-        return _unpack_stream(self.__layout, buffer)
+        return unpack_stream(self.__layout, buffer)
 
     def unpack_stream_with_len(self, buffer) -> UnpackLenResult:
-        return _unpack_stream_with_len(self.__layout, buffer)
+        return unpack_stream_with_len(self.__layout, buffer)
 
     @property
     def format(self) -> str:
@@ -335,6 +269,7 @@ class Padding(StandardStruct):
 
     __DEFAULT_LAYOUT = Struct("x")
 
+    # noinspection PyPropertyDefinition
     @classmethod
     @property
     def DEFAULT_LAYOUT(cls) -> Struct:
@@ -359,6 +294,7 @@ class Char(StandardStruct):
 
     __DEFAULT_LAYOUT = Struct("c")
 
+    # noinspection PyPropertyDefinition
     @classmethod
     @property
     def DEFAULT_LAYOUT(cls) -> Struct:
@@ -373,6 +309,7 @@ class Int8(StandardStruct):
 
     __DEFAULT_LAYOUT = Struct("b")
 
+    # noinspection PyPropertyDefinition
     @classmethod
     @property
     def DEFAULT_LAYOUT(cls) -> Struct:
@@ -387,6 +324,7 @@ class UInt8(StandardStruct):
 
     __DEFAULT_LAYOUT = Struct("B")
 
+    # noinspection PyPropertyDefinition
     @classmethod
     @property
     def DEFAULT_LAYOUT(cls) -> Struct:
@@ -401,6 +339,7 @@ class Boolean(StandardStruct):
 
     __DEFAULT_LAYOUT = Struct("?")
 
+    # noinspection PyPropertyDefinition
     @classmethod
     @property
     def DEFAULT_LAYOUT(cls) -> Struct:
@@ -415,6 +354,7 @@ class Int16(StandardStruct):
 
     __DEFAULT_LAYOUT = Struct("h")
 
+    # noinspection PyPropertyDefinition
     @classmethod
     @property
     def DEFAULT_LAYOUT(cls) -> Struct:
@@ -429,6 +369,7 @@ class UInt16(StandardStruct):
 
     __DEFAULT_LAYOUT = Struct("H")
 
+    # noinspection PyPropertyDefinition
     @classmethod
     @property
     def DEFAULT_LAYOUT(cls) -> Struct:
@@ -443,6 +384,7 @@ class Int32(StandardStruct):
 
     __DEFAULT_LAYOUT = Struct("i")
 
+    # noinspection PyPropertyDefinition
     @classmethod
     @property
     def DEFAULT_LAYOUT(cls) -> Struct:
@@ -457,6 +399,7 @@ class UInt32(StandardStruct):
 
     __DEFAULT_LAYOUT = Struct("I")
 
+    # noinspection PyPropertyDefinition
     @classmethod
     @property
     def DEFAULT_LAYOUT(cls) -> Struct:
@@ -471,6 +414,7 @@ class Int64(StandardStruct):
 
     __DEFAULT_LAYOUT = Struct("q")
 
+    # noinspection PyPropertyDefinition
     @classmethod
     @property
     def DEFAULT_LAYOUT(cls) -> Struct:
@@ -485,6 +429,7 @@ class UInt64(StandardStruct):
 
     __DEFAULT_LAYOUT = Struct("Q")
 
+    # noinspection PyPropertyDefinition
     @classmethod
     @property
     def DEFAULT_LAYOUT(cls) -> Struct:
@@ -500,6 +445,7 @@ class SSizeT(StandardStruct):
 
     __DEFAULT_LAYOUT = Struct("n")
 
+    # noinspection PyPropertyDefinition
     @classmethod
     @property
     def DEFAULT_LAYOUT(cls) -> Struct:
@@ -514,6 +460,7 @@ class SizeT(StandardStruct):
 
     __DEFAULT_LAYOUT = Struct("N")
 
+    # noinspection PyPropertyDefinition
     @classmethod
     @property
     def DEFAULT_LAYOUT(cls) -> Struct:
@@ -528,6 +475,7 @@ class Float16(StandardStruct):
 
     __DEFAULT_LAYOUT = Struct("e")
 
+    # noinspection PyPropertyDefinition
     @classmethod
     @property
     def DEFAULT_LAYOUT(cls) -> Struct:
@@ -542,6 +490,7 @@ class Float32(StandardStruct):
 
     __DEFAULT_LAYOUT = Struct("f")
 
+    # noinspection PyPropertyDefinition
     @classmethod
     @property
     def DEFAULT_LAYOUT(cls) -> Struct:
@@ -556,6 +505,7 @@ class Float64(StandardStruct):
 
     __DEFAULT_LAYOUT = Struct("d")
 
+    # noinspection PyPropertyDefinition
     @classmethod
     @property
     def DEFAULT_LAYOUT(cls) -> Struct:
@@ -570,6 +520,7 @@ class Bytes(StandardStruct):
 
     __DEFAULT_LAYOUT = Struct("s")
 
+    # noinspection PyPropertyDefinition
     @classmethod
     @property
     def DEFAULT_LAYOUT(cls) -> Struct:
@@ -584,6 +535,7 @@ class FixedPascalString(StandardStruct):
 
     __DEFAULT_LAYOUT = Struct("p")
 
+    # noinspection PyPropertyDefinition
     @classmethod
     @property
     def DEFAULT_LAYOUT(cls) -> Struct:
@@ -598,6 +550,7 @@ class CPointer(StandardStruct):
 
     __DEFAULT_LAYOUT = Struct("P")
 
+    # noinspection PyPropertyDefinition
     @classmethod
     @property
     def DEFAULT_LAYOUT(cls) -> Struct:

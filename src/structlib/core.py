@@ -7,6 +7,8 @@ from .types import UnpackResult, UnpackLenResult, BufferStream, BufferApiType, B
 
 
 class ByteLayoutFlag(Flag):
+    # DOH, these aren't flags; since it's 4 values
+    #   Also currently unused
     NativeEndian = 0b00
     NetworkEndian = 0b01
     LittleEndian = 0b10
@@ -20,64 +22,120 @@ class ByteLayoutFlag(Flag):
 
 
 class StructObj:
-    # Things of note; we don't use format anymore; because that couples it to a string, which we'd preferably use a converter-mapping for
-    # Also we now only use one size; fixed_size, which is the fixed_size of a variable_size structure or the total size in a fixed_size structure
-
     @property
     def fixed_size(self) -> int:
-        """ The fixed size of the buffer """
+        """
+        The fixed size of the buffer; the minimum number of bytes read.
+        For non-variable-length structs, this is the total number of bytes read.
+        For variable-length structs, this is the minimum number of bytes read.
+        """
         raise NotImplementedError
 
     @property
     def args(self) -> int:
         """
-        The number of arguments this struct expects
-        :return:
+        The number of arguments this struct expects.
+
+        Avoid GOTCHAs, Tuples, lists, and other collections should always be considered as 1 arg for consistency.
+        :return: A non-negative integer.
         """
         raise NotImplementedError
 
     @property
     def is_var_size(self) -> bool:
+        """
+        Whether this
+        :return: True if the struct's size is variable, False otherwise.
+        """
         raise NotImplementedError
 
     def pack(self, *args) -> bytes:
+        """
+        Packs arguments into their specified byte format.
+        :param args: The data to be packed to bytes.
+        :return: The byte representation of args.
+        """
         raise NotImplementedError
 
     def pack_stream(self, buffer: BufferStream, *args) -> int:
+        """
+        Packs arguments into their specified byte format into a binary stream-like buffer.
+        The buffer's position is expected to have advanced to allow sequential writes to behave as expected.
+        :param buffer: The binary stream to write to.
+        :param args: The data to be packed to bytes.
+        :return: The byte representation of args.
+        """
         raise NotImplementedError
 
-    def pack_into(self, buffer, *args, offset: int = None) -> int:
+    def pack_into(self, buffer: Buffer, *args, offset: int = None) -> int:
+        """
+        Packs arguments into their specified byte format into a buffer.
+        If the buffer is a binary stream, the stream's position is not altered.
+        :param buffer: The buffer to write to.
+        :param args: The data to be packed to bytes.
+        :param offset: The offset from the start of the buffer to write to in the buffer, defaults to the current position for binary streams and 0 for byte buffers.
+        :return: The byte representation of args.
+        """
         raise NotImplementedError
 
-    def unpack(self, buffer) -> UnpackResult:
+    def unpack(self, buffer: Buffer) -> UnpackResult:
+        """
+        Unpacks arguments from their specified byte format.
+        :return: A tuple of the unpacked arguments.
+        """
         raise NotImplementedError
 
     def unpack_with_len(self, buffer) -> UnpackLenResult:
+        """
+        Unpacks arguments from their specified byte format.
+        :return: A tuple containing the number of bytes read, and a tuple of the unpacked arguments.
+        """
         raise NotImplementedError
 
     def unpack_stream(self, buffer: BufferStream) -> UnpackResult:
+        """
+        Unpacks arguments using their specified byte format from a binary stream-like buffer.
+        The buffer's position is expected to have advanced to allow sequential reads to behave as expected.
+        :param buffer: The binary stream to read from.
+        :return: A tuple of the unpacked arguments.
+        """
         raise NotImplementedError
 
     def unpack_stream_with_len(self, buffer) -> UnpackLenResult:
+        """
+        Unpacks arguments using their specified byte format from a binary stream-like buffer.
+        The buffer's position is expected to have advanced to allow sequential reads to behave as expected.
+        :param buffer: The binary stream to read from.
+        :return: A tuple containing the number of bytes read, and a tuple of the unpacked arguments.
+        """
         raise NotImplementedError
 
-    def unpack_from(self, buffer, offset: int = None) -> UnpackResult:  # known case of _struct.Struct.unpack_from
+    def unpack_from(self, buffer, offset: int = None) -> UnpackResult:
         """
-        Return a tuple containing unpacked values.
-
-        Values are unpacked according to the format string Struct.format.
-
-        The buffer's size in bytes, starting at position offset, must be
-        at least Struct.size.
-
-        See help(struct) for more on format strings.
+        Packs arguments using their specified byte format from a buffer.
+        If the buffer is a binary stream, the stream's position is not altered.
+        :param buffer: The buffer to read from.
+        :param offset: The offset from the start of the buffer to write to in the buffer, defaults to the current position for binary streams and 0 for byte buffers.
+        :return: A tuple of the unpacked arguments.
         """
         raise NotImplementedError
 
     def unpack_from_with_len(self, buffer, offset: int = None) -> UnpackLenResult:
+        """
+        Packs arguments using their specified byte format from a buffer.
+        If the buffer is a binary stream, the stream's position is not altered.
+        :param buffer: The buffer to read from.
+        :param offset: The offset from the start of the buffer to write to in the buffer, defaults to the current position for binary streams and 0 for byte buffers.
+        :return: A tuple containing the number of bytes read, and a tuple of the unpacked arguments.
+        """
         raise NotImplementedError
 
     def iter_unpack(self, buffer) -> Iterable[Tuple]:
+        """
+        Unpacks the buffer repeatedly until no more data can be read.
+        :param buffer: The buffer to read from.
+        :return: A tuple of the unpacked arguments.
+        """
         raise NotImplementedError
 
 
@@ -362,4 +420,3 @@ class MultiStruct(StructObjHelper):
             else:
                 stream.seek(-1, 1)
             yield self._unpack_stream(stream)[1]
-

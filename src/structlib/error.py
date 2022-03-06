@@ -66,6 +66,7 @@ class StructVarBufferTooSmallError(StructBufferTooSmallError):
     def __str__(self):
         return f"{self.func} read a var-buffer of {self.var_size} bytes (expected var-buffer is {self.buffer_size})"
 
+
 # class StructBufferTooBigError(StructBufferSizeError):
 #     def __init__(self, func_name: str, fixed_size: int, var_sized: bool = False, strict_sized: bool = False, *args):
 #         super().__init__(*args)
@@ -76,3 +77,14 @@ class StructVarBufferTooSmallError(StructBufferTooSmallError):
 #
 #     def __str__(self):
 #         return f"{self.func} requires a buffer of {self.fixed_size} bytes"
+
+
+__all__ = [
+    "StructError",
+    "StructPackingError",
+    "StructNestedPackingError",
+    "StructBufferSizeError",
+    "StructBufferTooSmallError",
+    "StructOffsetBufferTooSmallError",
+    "StructVarBufferTooSmallError",
+]
