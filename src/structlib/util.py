@@ -56,12 +56,12 @@ def pack_stream(layout: Struct, buffer: BufferStream, *args) -> int:
 
 
 def unpack_buffer(layout: Struct, buffer: BufferApiType) -> UnpackResult:
-    byte_buffer = buffer.read(layout.size)
-    return layout.unpack(byte_buffer)
+    return layout.unpack(buffer)
 
 
 def unpack_stream(layout: Struct, buffer: BufferStream) -> UnpackResult:
-    return layout.unpack(buffer)
+    byte_buffer = buffer.read(layout.size)
+    return layout.unpack(byte_buffer)
 
 
 def unpack(layout: Struct, buffer: Buffer) -> UnpackResult:
@@ -88,16 +88,16 @@ def unpack_with_len(layout: Struct, buffer: Buffer) -> UnpackLenResult:
 
 
 def unpack_from_buffer(layout: Struct, buffer: BufferApiType, offset: int = 0) -> UnpackResult:
+    return layout.unpack_from(buffer, offset)
+
+
+def unpack_from_stream(layout: Struct, buffer: BufferStream, offset: int = 0) -> UnpackResult:
     return_to = buffer.tell()
     buffer.seek(offset)
     stream_buffer = buffer.read(layout.size)
     result = layout.unpack(stream_buffer)
     buffer.seek(return_to)
     return result
-
-
-def unpack_from_stream(layout: Struct, buffer: BufferStream, offset: int = 0) -> UnpackResult:
-    return layout.unpack_from(buffer, offset)
 
 
 def unpack_from(layout: Struct, buffer: Buffer, offset: int = 0) -> UnpackResult:
@@ -108,16 +108,16 @@ def unpack_from(layout: Struct, buffer: Buffer, offset: int = 0) -> UnpackResult
 
 
 def unpack_from_buffer_with_len(layout: Struct, buffer: BufferApiType, offset: int = 0) -> UnpackLenResult:
+    return layout.size, layout.unpack_from(buffer, offset)
+
+
+def unpack_from_stream_with_len(layout: Struct, buffer: BufferStream, offset: int = 0) -> UnpackLenResult:
     return_to = buffer.tell()
     buffer.seek(offset)
     stream_buffer = buffer.read(layout.size)
     result = layout.unpack(stream_buffer)
     buffer.seek(return_to)
     return layout.size, result
-
-
-def unpack_from_stream_with_len(layout: Struct, buffer: BufferStream, offset: int = 0) -> UnpackLenResult:
-    return layout.size, layout.unpack_from(buffer, offset)
 
 
 def unpack_from_with_len(layout: Struct, buffer: Buffer, offset: int = 0) -> UnpackLenResult:
