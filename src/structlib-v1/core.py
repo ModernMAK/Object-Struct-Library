@@ -319,10 +319,6 @@ class StructObjHelper(StructObj):  # Mixin to simplify functionality for custom 
     def _arg_count_mismatch(self, *args) -> bool:
         return len(args) != self.args
 
-    def _buffer_too_small(self, buffer: BufferApiType, offset: int = None) -> bool:
-        size = len(buffer) - (offset or 0)
-        return size < self.fixed_size
-
     def _arg_types(self) -> Optional[Union[Type, Tuple[Type, ...]]]:
         return None
 
@@ -336,6 +332,10 @@ class StructObjHelper(StructObj):  # Mixin to simplify functionality for custom 
         #     msg = f"arguments for '{cls.__name__}' must be a {type_name.__name__} object"
         return any(not isinstance(a, types) for a in args)
 
+    def _buffer_too_small(self, buffer: BufferApiType, offset: int = None) -> bool:
+        size = len(buffer) - (offset or 0)
+        return size < self.fixed_size
+
     def _stream_too_small(self, stream: BufferStream, offset: int = None) -> bool:
         if offset:
             return_to = stream.tell()
@@ -346,6 +346,26 @@ class StructObjHelper(StructObj):  # Mixin to simplify functionality for custom 
             read = stream.read(self.fixed_size)
             stream.seek(-self.fixed_size, 1)
         return len(read) < self.fixed_size
+
+    def _buffer_remaining(self, buffer: BufferApiType, offset: int = None) -> int:
+        return len(buffer) - (offset or 0)
+
+    def _stream_remaining(self, stream: BufferStream, offset: int = None) -> int:
+        if offset:
+            return_to = stream.tell()
+            stream.seek(offset)
+            read = stream.read(self.fixed_size)
+            stream.seek(return_to)
+        else:
+            read = stream.read(self.fixed_size)
+            stream.seek(-self.fixed_size, 1)
+        return len(read)
+
+    def _remaining(self, buffer:Buffer, offset:int = None) -> int:
+        if isinstance(buffer, BufferStreamTypes):
+            return self._stream_remaining(buffer, offset=offset)
+        else:
+            return self._buffer_remaining(buffer, offset=offset)
 
     def _too_small(self, buffer: Buffer, offset: int = None) -> bool:
         if isinstance(buffer, BufferStreamTypes):
@@ -373,7 +393,7 @@ class StructObjHelper(StructObj):  # Mixin to simplify functionality for custom 
         if self._arg_count_mismatch(*args):
             raise StructPackingError(self.pack_into.__name__, self.args, len(*args))
         if self._too_small(buffer, offset):
-            raise StructOffsetBufferTooSmallError(self.pack_into.__name__, self.fixed_size, offset, None, self.is_var_size)  # TODO, pass in buffer size
+            raise StructOffsetBufferTooSmallError(self.pack_into.__name__, self.fixed_size, offset, self._remaining(buffer,offset), self.is_var_size)
         if isinstance(buffer, BufferStreamTypes):
             return self._pack_into_stream(buffer, *args, offset=offset)
         else:
@@ -432,7 +452,7 @@ class StructObjHelper(StructObj):  # Mixin to simplify functionality for custom 
 
     def unpack_from(self, buffer: Buffer, *, offset: int = None) -> UnpackResult:
         if self._too_small(buffer, offset):
-            raise StructOffsetBufferTooSmallError(self.unpack_from.__name__, self.fixed_size, offset, None, self.is_var_size)  # TODO, pass in buffer size
+            raise StructOffsetBufferTooSmallError(self.unpack_from.__name__, self.fixed_size, offset, self._remaining(buffer,offset), self.is_var_size)  # TODO, pass in buffer size
         if isinstance(buffer, BufferStreamTypes):
             return self._unpack_from_stream(buffer, offset=offset)[1]
         else:
@@ -440,7 +460,7 @@ class StructObjHelper(StructObj):  # Mixin to simplify functionality for custom 
 
     def unpack_from_with_len(self, buffer, offset: int = 0) -> UnpackLenResult:
         if self._too_small(buffer, offset):
-            raise StructOffsetBufferTooSmallError(self.unpack_from_with_len.__name__, self.fixed_size, offset, None, self.is_var_size)  # TODO, pass in buffer size
+            raise StructOffsetBufferTooSmallError(self.unpack_from_with_len.__name__, self.fixed_size, offset,  self._remaining(buffer,offset), self.is_var_size)  # TODO, pass in buffer size
         if isinstance(buffer, BufferStreamTypes):
             return self._unpack_from_stream(buffer, offset=offset)
         else:

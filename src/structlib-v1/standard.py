@@ -1,12 +1,13 @@
 from __future__ import annotations
 import re
+from abc import ABC
 from io import BytesIO
 from struct import Struct
-from typing import Tuple, Iterable, Optional, Union, Literal, Type
+from typing import Tuple, Iterable, Optional, Union, Literal, Type, Any
 
 from .core import StructObj, ByteLayoutFlag, StructObjHelper
 from .error import StructPackingError, StructOffsetBufferTooSmallError, StructBufferTooSmallError
-from .packer import calculate_padding
+from .packer import calculate_padding, ByteFlags
 from .types import UnpackResult, UnpackLenResult, BufferStream, BufferApiType, Buffer, BufferStreamTypes
 from .util import hybridmethod, pack_into, pack_stream, unpack_stream, unpack, unpack_stream_with_len, unpack_with_len, unpack_from, unpack_from_with_len, iter_unpack, pack_into_stream
 
@@ -403,7 +404,7 @@ class HybridStructObjHelper(StructObjHelper):  # Mixin to simplify functionality
         if self._arg_count_mismatch(*args):
             raise StructPackingError(self.pack_into.__name__, self.args, len(*args))
         if self._too_small(buffer, offset):
-            raise StructOffsetBufferTooSmallError(self.pack_into.__name__, self.fixed_size, offset, None, self.is_var_size)  # TODO, pass in buffer size
+            raise StructOffsetBufferTooSmallError(self.pack_into.__name__, self.fixed_size, offset, self._remaining(buffer,offset), self.is_var_size)  # TODO, pass in buffer size
         if isinstance(buffer, BufferStreamTypes):
             return self._pack_into_stream(buffer, *args, offset=offset)
         else:
@@ -489,7 +490,7 @@ class HybridStructObjHelper(StructObjHelper):  # Mixin to simplify functionality
     @unpack_from_with_len.instancemethod
     def unpack_from_with_len(self, buffer, offset: int = 0) -> UnpackLenResult:
         if self._too_small(buffer, offset):
-            raise StructOffsetBufferTooSmallError(self.unpack_from_with_len.__name__, self.fixed_size, offset, None, self.is_var_size)  # TODO, pass in buffer size
+            raise StructOffsetBufferTooSmallError(self.unpack_from_with_len.__name__, self.fixed_size, offset, self._remaining(buffer,offset), self.is_var_size)  # TODO, pass in buffer size
         if isinstance(buffer, BufferStreamTypes):
             return self._unpack_from_stream(buffer, offset=offset)
         else:
@@ -507,51 +508,13 @@ class HybridStructObjHelper(StructObjHelper):  # Mixin to simplify functionality
             return self._iter_unpack_buffer(buffer)
 
 
-class _IntStruct(HybridStructObjHelper):
-    def __init__(self, args: int, size: int, signed: bool, little_endian: bool = True, align: bool = False):
-        self.__signed = signed
-        self.__size = size
-        self.__args = args
-        self.__endian = little_endian
-        self.__align = align
+class DefaultHybridMixin(StructObjHelper, ABC):
 
-    @property
-    def _fixed_size(self) -> int:
-        return self.__size * self.__args
+    def _pack_bytes(self, *args: Any) -> bytes:
+        raise NotImplementedError
 
-    @property
-    def _is_var_size(self) -> bool:
-        return False
-
-    @property
-    def _alignment(self) -> int:
-        return self.__size
-
-    @property
-    def _align(self) -> bool:
-        return self.__align
-
-    @property
-    def _args(self) -> int:
-        return self.__args
-
-    def _pack_bytes(self, *args: int) -> bytes:
-        ENDIAN = "little" if self.__endian else "big"
-        with BytesIO() as buffer:
-            for v in args:
-                v_buf = int.to_bytes(v, self.__size, ENDIAN, signed=self.__signed)
-                buffer.write(v_buf)
-            buffer.seek(0)
-            return buffer.read()
-
-    def _unpack_bytes(self, buffer: BufferApiType) -> Tuple[int, ...]:
-        ENDIAN = "little" if self.__endian else "big"
-        results = []
-        for _ in range(self.__args):
-            v_buf = buffer[_ * self.__size:(_ + 1) * self.__size]
-            v = int.from_bytes(v_buf, ENDIAN, signed=self.__signed)
-            results.append(v)
-        return tuple(results)
+    def _unpack_bytes(self, buffer: BufferApiType) -> Tuple[Any, ...]:
+        raise NotImplementedError
 
     def _pack(self, *args) -> bytes:
         return self._pack_bytes(*args)
@@ -638,12 +601,58 @@ class _IntStruct(HybridStructObjHelper):
             sentinel = stream.read(1)
             if len(sentinel) != 1:
                 break
-            stream.seek(-1,1)
+            stream.seek(-1, 1)
             padding = calculate_padding(stream.tell(), self.alignment) if self.align else 0
             if padding > 0:
                 _ = stream.read(padding)
             read_buffer = stream.read(f_size)
             yield self._unpack_bytes(read_buffer)
+
+
+class _IntStruct(HybridStructObjHelper, DefaultHybridMixin, ABC):
+    def __init__(self, args: int, size: int, signed: bool, flags: ByteFlags = ByteFlags.Aligned | ByteFlags.NativeEndian):
+        self.__signed = signed
+        self.__size = size
+        self.__args = args
+        self.__endian = flags.endian_literal
+        self.__align = ByteFlags.Aligned in flags
+        self.__flags = flags
+
+    @property
+    def _fixed_size(self) -> int:
+        return self.__size * self.__args
+
+    @property
+    def _is_var_size(self) -> bool:
+        return False
+
+    @property
+    def _alignment(self) -> int:
+        return self.__size
+
+    @property
+    def _align(self) -> bool:
+        return self.__align
+
+    @property
+    def _args(self) -> int:
+        return self.__args
+
+    def _pack_bytes(self, *args: int) -> bytes:
+        with BytesIO() as buffer:
+            for v in args:
+                v_buf = int.to_bytes(v, self.__size, self.__endian, signed=self.__signed)
+                buffer.write(v_buf)
+            buffer.seek(0)
+            return buffer.read()
+
+    def _unpack_bytes(self, buffer: BufferApiType) -> Tuple[int, ...]:
+        results = []
+        for _ in range(self.__args):
+            v_buf = buffer[_ * self.__size:(_ + 1) * self.__size]
+            v = int.from_bytes(v_buf, self.__endian, signed=self.__signed)
+            results.append(v)
+        return tuple(results)
 
 
 class Int8(_IntStruct):
@@ -656,8 +665,8 @@ class Int8(_IntStruct):
     def default_instance(cls) -> HybridStructObjHelper:
         return cls()
 
-    def __init__(self, args: int = 1, little_endian: bool = True, align: bool = False):
-        super().__init__(args, self.__BYTE_SIZE, self.__SIGNED, little_endian, align)
+    def __init__(self, args: int = 1, flags: ByteFlags = ByteFlags.NativeEndian | ByteFlags.Aligned):
+        super().__init__(args, self.__BYTE_SIZE, self.__SIGNED, flags)
 
 
 class UInt8(_IntStruct):
@@ -670,8 +679,8 @@ class UInt8(_IntStruct):
     def default_instance(cls) -> HybridStructObjHelper:
         return cls()
 
-    def __init__(self, args: int = 1, little_endian: bool = True, align: bool = False):
-        super().__init__(args, self.__BYTE_SIZE, self.__SIGNED, little_endian, align)
+    def __init__(self, args: int = 1, flags: ByteFlags = ByteFlags.NativeEndian | ByteFlags.Aligned):
+        super().__init__(args, self.__BYTE_SIZE, self.__SIGNED, flags)
 
 
 class Int16(_IntStruct):
@@ -684,8 +693,8 @@ class Int16(_IntStruct):
     def default_instance(cls) -> HybridStructObjHelper:
         return cls()
 
-    def __init__(self, args: int = 1, little_endian: bool = True, align: bool = False):
-        super().__init__(args, self.__BYTE_SIZE, self.__SIGNED, little_endian, align)
+    def __init__(self, args: int = 1, flags: ByteFlags = ByteFlags.NativeEndian | ByteFlags.Aligned):
+        super().__init__(args, self.__BYTE_SIZE, self.__SIGNED, flags)
 
 
 class UInt16(_IntStruct):
@@ -698,8 +707,8 @@ class UInt16(_IntStruct):
     def default_instance(cls) -> HybridStructObjHelper:
         return cls()
 
-    def __init__(self, args: int = 1, little_endian: bool = True, align: bool = False):
-        super().__init__(args, self.__BYTE_SIZE, self.__SIGNED, little_endian, align)
+    def __init__(self, args: int = 1, flags: ByteFlags = ByteFlags.NativeEndian | ByteFlags.Aligned):
+        super().__init__(args, self.__BYTE_SIZE, self.__SIGNED, flags)
 
 
 class Int32(_IntStruct):
@@ -712,8 +721,8 @@ class Int32(_IntStruct):
     def default_instance(cls) -> HybridStructObjHelper:
         return cls()
 
-    def __init__(self, args: int = 1, little_endian: bool = True, align: bool = False):
-        super().__init__(args, self.__BYTE_SIZE, self.__SIGNED, little_endian, align)
+    def __init__(self, args: int = 1, flags: ByteFlags = ByteFlags.NativeEndian | ByteFlags.Aligned):
+        super().__init__(args, self.__BYTE_SIZE, self.__SIGNED, flags)
 
 
 class UInt32(_IntStruct):
@@ -726,8 +735,8 @@ class UInt32(_IntStruct):
     def default_instance(cls) -> HybridStructObjHelper:
         return cls()
 
-    def __init__(self, args: int = 1, little_endian: bool = True, align: bool = False):
-        super().__init__(args, self.__BYTE_SIZE, self.__SIGNED, little_endian, align)
+    def __init__(self, args: int = 1, flags: ByteFlags = ByteFlags.NativeEndian | ByteFlags.Aligned):
+        super().__init__(args, self.__BYTE_SIZE, self.__SIGNED, flags)
 
 
 class Int64(_IntStruct):
@@ -740,8 +749,8 @@ class Int64(_IntStruct):
     def default_instance(cls) -> HybridStructObjHelper:
         return cls()
 
-    def __init__(self, args: int = 1, little_endian: bool = True, align: bool = False):
-        super().__init__(args, self.__BYTE_SIZE, self.__SIGNED, little_endian, align)
+    def __init__(self, args: int = 1, flags: ByteFlags = ByteFlags.NativeEndian | ByteFlags.Aligned):
+        super().__init__(args, self.__BYTE_SIZE, self.__SIGNED, flags)
 
 
 class UInt64(_IntStruct):
@@ -754,38 +763,8 @@ class UInt64(_IntStruct):
     def default_instance(cls) -> HybridStructObjHelper:
         return cls()
 
-    def __init__(self, args: int = 1, little_endian: bool = True, align: bool = False):
-        super().__init__(args, self.__BYTE_SIZE, self.__SIGNED, little_endian, align)
-#
-#
-# class OldInt8(StandardStruct):
-#     DEFAULT_CODE = "b"
-#
-#     __DEFAULT_LAYOUT = Struct("b")
-#
-#     # noinspection PyPropertyDefinition
-#     @classmethod
-#     @property
-#     def DEFAULT_LAYOUT(cls) -> Struct:
-#         return cls.__DEFAULT_LAYOUT
-#
-#     def __init__(self, repeat: int = 1, byte_layout_mark: str = None):
-#         super().__init__(repeat, "b", byte_layout_mark)
-#
-#
-# class UInt8(StandardStruct):
-#     DEFAULT_CODE = "B"
-#
-#     __DEFAULT_LAYOUT = Struct("B")
-#
-#     # noinspection PyPropertyDefinition
-#     @classmethod
-#     @property
-#     def DEFAULT_LAYOUT(cls) -> Struct:
-#         return cls.__DEFAULT_LAYOUT
-#
-#     def __init__(self, repeat: int = 1, byte_layout_mark: str = None):
-#         super().__init__(repeat, "B", byte_layout_mark)
+    def __init__(self, args: int = 1, flags: ByteFlags = ByteFlags.NativeEndian | ByteFlags.Aligned):
+        super().__init__(args, self.__BYTE_SIZE, self.__SIGNED, flags)
 
 
 class Boolean(StandardStruct):
@@ -801,96 +780,6 @@ class Boolean(StandardStruct):
 
     def __init__(self, repeat: int = 1, byte_layout_mark: str = None):
         super().__init__(repeat, "?", byte_layout_mark)
-#
-#
-# class Int16(StandardStruct):
-#     DEFAULT_CODE = "h"
-#
-#     __DEFAULT_LAYOUT = Struct("h")
-#
-#     # noinspection PyPropertyDefinition
-#     @classmethod
-#     @property
-#     def DEFAULT_LAYOUT(cls) -> Struct:
-#         return cls.__DEFAULT_LAYOUT
-#
-#     def __init__(self, repeat: int = 1, byte_layout_mark: str = None):
-#         super().__init__(repeat, "h", byte_layout_mark)
-#
-#
-# class UInt16(StandardStruct):
-#     DEFAULT_CODE = "H"
-#
-#     __DEFAULT_LAYOUT = Struct("H")
-#
-#     # noinspection PyPropertyDefinition
-#     @classmethod
-#     @property
-#     def DEFAULT_LAYOUT(cls) -> Struct:
-#         return cls.__DEFAULT_LAYOUT
-#
-#     def __init__(self, repeat: int = 1, byte_layout_mark: str = None):
-#         super().__init__(repeat, "H", byte_layout_mark)
-#
-#
-# class Int32(StandardStruct):
-#     DEFAULT_CODE = "i"  # l
-#
-#     __DEFAULT_LAYOUT = Struct("i")
-#
-#     # noinspection PyPropertyDefinition
-#     @classmethod
-#     @property
-#     def DEFAULT_LAYOUT(cls) -> Struct:
-#         return cls.__DEFAULT_LAYOUT
-#
-#     def __init__(self, repeat: int = 1, byte_layout_mark: str = None):
-#         super().__init__(repeat, "i", byte_layout_mark)
-#
-#
-# class UInt32(StandardStruct):
-#     DEFAULT_CODE = "I"  # L
-#
-#     __DEFAULT_LAYOUT = Struct("I")
-#
-#     # noinspection PyPropertyDefinition
-#     @classmethod
-#     @property
-#     def DEFAULT_LAYOUT(cls) -> Struct:
-#         return cls.__DEFAULT_LAYOUT
-#
-#     def __init__(self, repeat: int = 1, byte_layout_mark: str = None):
-#         super().__init__(repeat, "I", byte_layout_mark)
-#
-#
-# class Int64(StandardStruct):
-#     DEFAULT_CODE = "q"  # l
-#
-#     __DEFAULT_LAYOUT = Struct("q")
-#
-#     # noinspection PyPropertyDefinition
-#     @classmethod
-#     @property
-#     def DEFAULT_LAYOUT(cls) -> Struct:
-#         return cls.__DEFAULT_LAYOUT
-#
-#     def __init__(self, repeat: int = 1, byte_layout_mark: str = None):
-#         super().__init__(repeat, "q", byte_layout_mark)
-#
-#
-# class UInt64(StandardStruct):
-#     DEFAULT_CODE = "Q"  # L
-#
-#     __DEFAULT_LAYOUT = Struct("Q")
-#
-#     # noinspection PyPropertyDefinition
-#     @classmethod
-#     @property
-#     def DEFAULT_LAYOUT(cls) -> Struct:
-#         return cls.__DEFAULT_LAYOUT
-#
-#     def __init__(self, repeat: int = 1, byte_layout_mark: str = None):
-#         super().__init__(repeat, "Q", byte_layout_mark)
 
 
 # C Size-Type
@@ -924,49 +813,86 @@ class SizeT(StandardStruct):
         super().__init__(repeat, "N", byte_layout_mark)
 
 
-class Float16(StandardStruct):
-    DEFAULT_CODE = "e"
+class _FloatStruct(HybridStructObjHelper, DefaultHybridMixin, ABC):
+    __ENDIAN_LITERAL2CODE = {'little': '<', 'big': '>'}
+    __SIZE_VALUE2CODE = {2: 'e', 4: 'f', 8: 'd'}
 
-    __DEFAULT_LAYOUT = Struct("e")
+    def __init__(self, args: int, size: int, flags: ByteFlags = ByteFlags.Aligned | ByteFlags.NativeEndian):
+        self.__size = size
+        self.__args = args
+        self.__align = ByteFlags.Aligned in flags
+        self.__flags = flags
+        endian_code = self.__ENDIAN_LITERAL2CODE[flags.endian_literal]
+        size_code = self.__SIZE_VALUE2CODE[self.__size]
+        self.__struct = Struct(f"{endian_code} {self.__args}{size_code}")
+
+    @property
+    def _fixed_size(self) -> int:
+        return self.__size * self.__args
+
+    @property
+    def _is_var_size(self) -> bool:
+        return False
+
+    @property
+    def _alignment(self) -> int:
+        return self.__size
+
+    @property
+    def _align(self) -> bool:
+        return self.__align
+
+    @property
+    def _args(self) -> int:
+        return self.__args
+
+    def _pack_bytes(self, *args: float) -> bytes:
+        return self.__struct.pack(*args)
+
+    def _unpack_bytes(self, buffer: BufferApiType) -> Tuple[float, ...]:
+        return self.__struct.unpack(buffer)
+
+
+class Float16(_FloatStruct):
+    BUILTIN_STRUCT_CODE = "e"
+    __BYTE_SIZE = 16 // 8
 
     # noinspection PyPropertyDefinition
     @classmethod
     @property
-    def DEFAULT_LAYOUT(cls) -> Struct:
-        return cls.__DEFAULT_LAYOUT
+    def default_instance(cls) -> HybridStructObjHelper:
+        return cls()
 
-    def __init__(self, repeat: int = 1, byte_layout_mark: str = None):
-        super().__init__(repeat, "e", byte_layout_mark)
-
-
-class Float32(StandardStruct):
-    DEFAULT_CODE = "f"
-
-    __DEFAULT_LAYOUT = Struct("f")
-
-    # noinspection PyPropertyDefinition
-    @classmethod
-    @property
-    def DEFAULT_LAYOUT(cls) -> Struct:
-        return cls.__DEFAULT_LAYOUT
-
-    def __init__(self, repeat: int = 1, byte_layout_mark: str = None):
-        super().__init__(repeat, "f", byte_layout_mark)
+    def __init__(self, args: int = 1, flags: ByteFlags = ByteFlags.Aligned | ByteFlags.NativeEndian):
+        super().__init__(args, self.__BYTE_SIZE, flags)
 
 
-class Float64(StandardStruct):
-    DEFAULT_CODE = "d"
-
-    __DEFAULT_LAYOUT = Struct("d")
+class Float32(_FloatStruct):
+    BUILTIN_STRUCT_CODE = "f"
+    __BYTE_SIZE = 32 // 8
 
     # noinspection PyPropertyDefinition
     @classmethod
     @property
-    def DEFAULT_LAYOUT(cls) -> Struct:
-        return cls.__DEFAULT_LAYOUT
+    def default_instance(cls) -> HybridStructObjHelper:
+        return cls()
 
-    def __init__(self, repeat: int = 1, byte_layout_mark: str = None):
-        super().__init__(repeat, "d", byte_layout_mark)
+    def __init__(self, args: int = 1, flags: ByteFlags = ByteFlags.Aligned | ByteFlags.NativeEndian):
+        super().__init__(args, self.__BYTE_SIZE, flags)
+
+
+class Float64(_FloatStruct):
+    BUILTIN_STRUCT_CODE = "d"
+    __BYTE_SIZE = 64 // 8
+
+    # noinspection PyPropertyDefinition
+    @classmethod
+    @property
+    def default_instance(cls) -> HybridStructObjHelper:
+        return cls()
+
+    def __init__(self, args: int = 1, flags: ByteFlags = ByteFlags.Aligned | ByteFlags.NativeEndian):
+        super().__init__(args, self.__BYTE_SIZE, flags)
 
 
 class Bytes(StandardStruct):
@@ -1016,9 +942,9 @@ class CPointer(StandardStruct):
 
 struct_code2class = {
 }
-for c in [Padding, Char,  Bytes, Boolean, SSizeT, SizeT, Float16, Float32, Float64, FixedPascalString, CPointer]:
+for c in [Padding, Char, Bytes, Boolean, SSizeT, SizeT, FixedPascalString, CPointer]:
     struct_code2class[c.DEFAULT_CODE] = c
-for c in [Int8, UInt8,Int16, UInt16, Int32, UInt32, Int64, UInt64]:
+for c in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64,  Float16, Float32, Float64,]:
     struct_code2class[c.BUILTIN_STRUCT_CODE] = c
 
 # Struct allows l/L to substitute for Int32

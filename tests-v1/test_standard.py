@@ -3,9 +3,10 @@ from io import BytesIO
 from struct import Struct
 from typing import Iterable, Tuple, List, Type
 
-from structlib import standard as std
+from structlib import definitions as std
 from structlib.core import StructObj, MultiStruct
-from structlib.standard import Int16, Float
+from structlib.packer import calculate_padding
+from structlib.definitions.integer import Int16, Float
 
 
 def test_standard_structs_against_builtin():
@@ -56,7 +57,6 @@ def test_standard_structs_against_builtin():
             assert i_du[0] == d
             assert c_du[0] == d
 
-
         struct_ = Struct(code)
         if d is None:
             struct__dp = struct_.pack()
@@ -82,21 +82,24 @@ def build_offset_buffer(expected: bytes, offset: int = 1) -> Tuple[bytes, bytes]
     return e, w
 
 
-def build_iter_buffer(expected: bytes, repeat: int = 2) -> bytes:
+def build_iter_buffer(expected: bytes, repeat: int = 2, alignment:int = None) -> bytes:
     w = bytearray()
     for _ in range(repeat):
+        if alignment is not None:
+            pad = calculate_padding(len(w),alignment)
+            w.extend(b'\x00' * pad)
         w.extend(expected)
     return w
 
 
-def run_test_with_data(obj: StructObj, data: Iterable[Tuple[Tuple, bytes, Tuple]]):
-    OFFSETS = [1]
+def run_test_with_data(obj: StructObj, data: Iterable[Tuple[Tuple, bytes, Tuple]], offsets: List[int] = None):
+    offsets = offsets or [1]
     for test_args, expected_buffer, expected_result in data:
         # PACK
         buffer = obj.pack(*test_args)
         assert buffer == expected_buffer, "pack"
 
-        for offset in OFFSETS:
+        for offset in offsets:
             # TEST BUFFER
             expected, writable = build_offset_buffer(expected_buffer, offset=offset)
             w = obj.pack_into(writable, *test_args, offset=offset)
@@ -124,41 +127,41 @@ def run_test_with_data(obj: StructObj, data: Iterable[Tuple[Tuple, bytes, Tuple]
         assert r == expected_result, "unpack (buffer)"
         read, r = obj.unpack_with_len(expected_buffer)
         assert read == len(expected_buffer), "unpack_with_len (buffer)"
-        assert r == expected_result,  "unpack_with_len (buffer)"
+        assert r == expected_result, "unpack_with_len (buffer)"
         # Unpack STREAM
         with BytesIO(expected_buffer) as str_buffer:
             r = obj.unpack(str_buffer)
-            assert r == expected_result,  "unpack (stream)"
+            assert r == expected_result, "unpack (stream)"
             str_buffer.seek(0)
             read, r = obj.unpack_with_len(str_buffer)
-            assert read == len(expected_buffer),  "unpack_with_len (stream)"
-            assert r == expected_result,  "unpack_with_len (stream)"
+            assert read == len(expected_buffer), "unpack_with_len (stream)"
+            assert r == expected_result, "unpack_with_len (stream)"
 
-        for offset in OFFSETS:
+        for offset in offsets:
             # TEST BUFFER
             expected, _ = build_offset_buffer(expected_buffer, offset=offset)
             r = obj.unpack_from(expected, offset=offset)
-            assert r == expected_result,  "unpack_from (buffer)"
+            assert r == expected_result, "unpack_from (buffer)"
             read, r = obj.unpack_from_with_len(expected, offset=offset)
-            assert r == expected_result,  "unpack_from_with_len (buffer)"
-            assert read == len(expected_buffer),  "unpack_from_with_len (buffer)"
+            assert r == expected_result, "unpack_from_with_len (buffer)"
+            assert read == len(expected_buffer), "unpack_from_with_len (buffer)"
 
             # TEST STREAM
             expected, _ = build_offset_buffer(expected_buffer, offset=offset)
             with BytesIO(expected) as wrt_stream:
                 r = obj.unpack_from(expected, offset=offset)
-                assert r == expected_result,  "unpack_from (stream)"
+                assert r == expected_result, "unpack_from (stream)"
                 wrt_stream.seek(0)
                 read, r = obj.unpack_from_with_len(expected, offset=offset)
-                assert r == expected_result,  "unpack_from_with_len (stream)"
-                assert read == len(expected_buffer),  "unpack_from_with_len (stream)"
+                assert r == expected_result, "unpack_from_with_len (stream)"
+                assert read == len(expected_buffer), "unpack_from_with_len (stream)"
 
         iter_buffer = build_iter_buffer(expected_buffer)
         for result in obj.iter_unpack(iter_buffer):
-            assert result == expected_result,  "iter_unpack (buffer)"
+            assert result == expected_result, "iter_unpack (buffer)"
         with BytesIO(iter_buffer) as stream:
             for result in obj.iter_unpack(stream):
-                assert result == expected_result,  "iter_unpack (stream)"
+                assert result == expected_result, "iter_unpack (stream)"
 
 
 def test_padding_standard():
@@ -175,6 +178,7 @@ def test_int_like_standards():
     for c_group, int_bytes, int_signed in class_groups:
         for args in range(MAX_ARGS):
             c = c_group if args == 0 else c_group(args)
+            offsets = [c_group.alignment]  # Default is aligned, our tests dont account for that rn
             args = args if args >= 1 else 1
             m = ((2 ** (8 * int_bytes - 1)) - 1) // args
             v = tuple([_ * m for _ in range(args)])
@@ -184,7 +188,7 @@ def test_int_like_standards():
                 b.extend(_)
             data = [(v, b, v)]
             try:
-                run_test_with_data(c, data)
+                run_test_with_data(c, data, offsets)
             except Exception as e:
                 print(e)
                 raise
@@ -196,6 +200,7 @@ def test_float_like_standards():
     for c_group, conv in class_groups:
         for args in range(len(floats)):
             c = c_group if args == 0 else c_group(args)
+            offsets = [c.alignment]
             args = args if args >= 1 else 1
             v = tuple([floats[_] for _ in range(args)])
             b_parts = [conv.pack(_) for _ in v]
@@ -204,7 +209,7 @@ def test_float_like_standards():
             for _ in b_parts:
                 b.extend(_)
             data = [(v, b, r)]
-            run_test_with_data(c, data)
+            run_test_with_data(c, data, offsets)
 
 
 def test_multi_struct_init():
@@ -239,8 +244,8 @@ def test_multi_struct():
     nested_floats = MultiStruct(std.Double, std.Float, std.Half)
 
     _floats = [-1.23456789, -1.0, -0.123456789, 0.0, 0.123456789, 1.0, 1.23456789]
-    float_data = [((v, v, v), struct.pack("=dfe", v, v, v), struct.unpack("=dfe", struct.pack("=dfe", v, v, v))) for v in _floats]
-    run_test_with_data(nested_floats, float_data)
+    float_data = [((v, v, v), struct.pack("dfe", v, v, v), struct.unpack("dfe", struct.pack("dfe", v, v, v))) for v in _floats]
+    run_test_with_data(nested_floats, float_data, offsets=[8])  # Use alignment of highest value
 
 
 def test_multi_struct_nested():
@@ -248,7 +253,7 @@ def test_multi_struct_nested():
     deep_nested_floats = MultiStruct(nested_floats, nested_floats, nested_floats)
 
     _floats = [-1.23456789, -1.0, -0.123456789, 0.0, 0.123456789, 1.0, 1.23456789]
-    float_data = [((v, v, v), struct.pack("=dfe", v, v, v), struct.unpack("=dfe", struct.pack("=dfe", v, v, v))) for v in _floats]
+    float_data = [((v, v, v), struct.pack("dfe", v, v, v), struct.unpack("dfe", struct.pack("dfe", v, v, v))) for v in _floats]
 
     nested_float_data = [((v, v, v), bytearray(b * 3), (r, r, r)) for v, b, r in float_data]
-    run_test_with_data(deep_nested_floats, nested_float_data)
+    run_test_with_data(deep_nested_floats, nested_float_data, offsets=[4])  # cant use 1
