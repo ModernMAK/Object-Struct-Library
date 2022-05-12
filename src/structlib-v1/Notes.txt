@@ -1,9 +1,0 @@
-All structs need:
-    Alignment
-        Local alignment
-        Global alignment
-    Size
-        Variable (not a fixed size structure)
-        Standard/Native (whether the struct varies by architecture)
-    Endian-ness
-
