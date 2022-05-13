@@ -1,8 +1,15 @@
 # Using IEEE_754
+import math
 import sys
-from typing import Tuple
+from typing import Tuple, List
 
 from structlib.protocols import SizeLikeMixin, PackLikeMixin
+
+
+# a = Struct( Int8, UInt8, Int32 )
+# Struct( Float * 6, a, 2 * half, 2 * Float )
+# grouped = struct.pack("6fbBi2h2f")
+#
 
 
 # Sign  |   Significand     |   Fraction
@@ -92,6 +99,115 @@ from structlib.protocols import SizeLikeMixin, PackLikeMixin
 #   exponent ->
 #   mantissa ->
 
+# class BinaryFloatConverter:
+#     SIGN_FLAG = 0b10000000
+#
+#     def __init__(self, exponent_bits:int, bytes:int):
+#         self.bytes = bytes
+#         self.bits = bytes * 8
+#         self.exponent_bits = exponent_bits
+#         self.sign_bits = 1
+#         self.fraction_bits = self.bits - exponent_bits - 1
+#
+#         # wierd tricks, but basically shift enough bits, then subtract to get proper mask
+#         self.exp_bias = 0b1 << (self.exponent_bits - 1) - 1
+#         self.exp_max = 0b1 << (self.exponent_bits - 1)
+#         self.exp_min = 0b1 - self.exp_bias
+#
+#
+#     def gen_zero(self,pos:bool) -> bytes:
+#         b = [0x00] * self.bytes
+#         if pos: # set pos flag
+#             b[0] = self.SIGN_FLAG
+#         return bytes(b)
+#
+#     @staticmethod
+#     def set_flag(b:List[int],bit:int):
+#         byte = bit // 8
+#         local_bit = bit % 8
+#         b[byte] |= 1 << local_bit
+#
+#     @classmethod
+#     def fill_exp(cls, b:List[int],exponent_bits:int):
+#         for i in range(exponent_bits):
+#             global_bit = i + 1 # assume 0 is sign
+#             cls.set_flag(b,global_bit)
+#
+#     def gen_inf(self,pos:bool) -> bytes:
+#         b = [0x00] * self.bytes
+#         if pos: # set pos flag
+#             b[0] = self.SIGN_FLAG
+#         self.fill_exp(b,self.exponent_bits)
+#         return bytes(b)
+#
+#     def gen_nan(self,pos:bool) -> bytes:
+#         b = [0x00] * self.bytes
+#         if pos: # set pos flag
+#             b[0] = self.SIGN_FLAG
+#         self.fill_exp(b,self.exponent_bits)
+#         # any bit can be set in the fraction, but we chose this one because...
+#         # it sets nan as quiet on some architectures (x86)
+#         self.set_flag(b, self.exponent_bits+1+1)
+#         return bytes(b)
+#
+#     def parse(self, b:bytes) -> Tuple[bool,int,int]:
+#         mutable = bytearray(b)
+#         pos = mutable[0] & self.SIGN_FLAG
+#         mutable[0] &= ~self.SIGN_FLAG
+#         # exponent = mutable[]
+#
+#
+#
+#     @classmethod
+#     def positive(cls, f:float) -> bool:
+#         return math.copysign(1, f) == 1
+#
+#
+#     def to_bytes(self, f: float, byteorder: str = sys.byteorder) -> bytes:
+#         b = self._to_bytes(f)
+#         sign_pos = self.positive(f)
+#         if
+#
+#         pre_dec = bin(int(f))
+#         post_dec = f-pre_dec
+#         post_dec_int =
+#
+#
+#
+#
+#
+#     @classmethod
+#     def from_bytes(cls, b: bytes, byteorder: str = sys.byteorder) -> float:
+#
+#     @staticmethod
+#     def _to_bytes(f: float) -> bytes:
+#
+#     @staticmethod
+#     def _from_bytes(b: bytes) -> float:
+#
+#
+#     class Float16:
+#         SIGN_BIT_OFFSET = 15
+#         SIGN_MASK = (1 << SIGN_BIT_OFFSET)
+#
+#         EXP_BIT_OFFSET = 10
+#         EXP_MASK = (0b11111 << EXP_BIT_OFFSET)
+#
+#         FRAC_BIT_OFFSET = 0
+#         FRAC_MASK = (0b1111111111 << FRAC_BIT_OFFSET)
+#
+#         @staticmethod
+#         def to_bytes(f:float, byteorder:str=sys.byteorder) -> bytes:
+#
+#
+#
+#         @staticmethod
+#         def _to_bytes(f: float) -> bytes:
+#
+#
+#         @staticmethod
+#         def _from_bytes(b:bytes) -> float:
+
 
 class _Float(SizeLikeMixin, PackLikeMixin):
     def __init__(self, *, args: int, size: int, align_as: int = None, byteorder: str = None, exponent_bits: int):
@@ -154,16 +270,16 @@ class FloatDefinition(_Float):
         return self.__size == other.__size and self.__exponent_bits == other.__exponent_bits
 
 
-def define_float(size: int, exponent_bits:int) -> FloatDefinition:
-    # inclusive mantissa INCLUDES the leading bit before the decimal
-    #   Our algo expects mantissa to be exclusive
-    if size < 1:
-        ...  # Todo raise an error
-    return FloatDefinition(size=size, exponent_bits=exponent_bits)
+# def define_float(size: int, exponent_bits:int) -> FloatDefinition:
+#     # inclusive mantissa INCLUDES the leading bit before the decimal
+#     #   Our algo expects mantissa to be exclusive
+#     if size < 1:
+#         ...  # Todo raise an error
+#     return FloatDefinition(size=size, exponent_bits=exponent_bits)
 
 
-Float16 = define_float(size=2, exponent_bits=5)
-Float32 = define_float(size=4, exponent_bits=8)
-Float64 = define_float(size=8, exponent_bits=11)
-Float128 = define_float(size=16,exponent_bits=15)
-Float256 = define_float(size=32, exponent_bits=19)
+Float16 = FloatDefinition(size=2, exponent_bits=5)
+Float32 = FloatDefinition(size=4, exponent_bits=8)
+Float64 = FloatDefinition(size=8, exponent_bits=11)
+Float128 = FloatDefinition(size=16, exponent_bits=15)
+Float256 = FloatDefinition(size=32, exponent_bits=19)
