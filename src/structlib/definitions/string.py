@@ -1,7 +1,7 @@
 from typing import Tuple, BinaryIO, Any
 
 from structlib.definitions import integer
-from structlib.protocols import PackAndSizeLike, SubStructLikeMixin, AlignLikeMixin, ArgLikeMixin
+from structlib.protocols import PackAndSizeLike, SubStructLikeMixin, AlignLikeMixin, ArgLikeMixin, WritableBuffer, ReadableBuffer
 from structlib.utils import size_of, write_data_to_buffer, read_data_from_buffer, read_data_from_stream, write_data_to_stream
 
 
@@ -10,14 +10,16 @@ class _PascalString(SubStructLikeMixin):
         AlignLikeMixin.__init__(self,align_as=align_as, default_align=size_of(size_struct))
         ArgLikeMixin.__init__(self,args=1)
         self._encoding = encoding
-        self._size_struct = size_struct
+        self._count_struct = size_struct
 
     def unpack(self, buffer: bytes) -> Tuple[str, ...]:
-        size_size = self._size_struct._size_
-        size_buffer = buffer[:size_size]
-        data_size = self._size_struct.unpack(size_buffer)[0]
-        data = buffer[size_size:size_size + data_size]
+        count_size = self._count_struct._size_
+        count_buffer = buffer[:count_size]
+        data_size = self._count_struct.unpack(count_buffer)[0]
+        data = buffer[count_size:count_size + data_size]
         decoded = data.decode(self._encoding)
+        if count_size+data_size < len(buffer):
+            raise NotImplementedError("Buffer Too Big!")
         return tuple([decoded])
 
     def pack(self, *args: str) -> bytes:
@@ -27,19 +29,19 @@ class _PascalString(SubStructLikeMixin):
         buffer = bytearray()
         for arg in args:
             b_str = arg.encode(self._encoding)
-            b_size = self._size_struct.pack(b_str)
+            b_size = self._count_struct.pack(b_str)
 
             buffer.extend(b_size)
             buffer.extend(b_str)
         return buffer
 
-    def pack_buffer(self, buffer: bytes, *args: Any, offset: int = 0, origin: int = 0) -> int:
+    def pack_buffer(self, buffer: WritableBuffer, *args: Any, offset: int = 0, origin: int = 0) -> int:
         data = self.pack(*args)
         return write_data_to_buffer(buffer, data, align_as=self._align_, offset=offset, origin=origin)
 
-    def _unpack_buffer(self, buffer: bytes, *, offset: int = 0, origin: int = 0) -> Tuple[int, Tuple[Any, ...]]:
-        size_read, size_buffer = read_data_from_buffer(buffer, self._size_struct._size_(), align_as=self._align_, offset=offset, origin=origin)
-        size = self._size_struct.unpack(size_buffer)[0]
+    def _unpack_buffer(self, buffer: ReadableBuffer, *, offset: int = 0, origin: int = 0) -> Tuple[int, Tuple[Any, ...]]:
+        size_read, size_buffer = read_data_from_buffer(buffer, self._count_struct._size_, align_as=self._align_, offset=offset, origin=origin)
+        size = self._count_struct.unpack(size_buffer)[0]
 
         data_read, data_buffer = read_data_from_buffer(buffer, size, align_as=1, offset=offset + size_read, origin=origin)
         decoded = data_buffer.decode(self._encoding)
@@ -50,14 +52,14 @@ class _PascalString(SubStructLikeMixin):
         return write_data_to_stream(stream, data, align_as=self._align_, origin=origin)
 
     def _unpack_stream(self, stream: BinaryIO, origin: int = 0) -> Tuple[int, Tuple[Any, ...]]:
-        size_read, size_buffer = read_data_from_stream(stream, self._size_struct._size_(), align_as=self._align_, origin=origin)
-        size = self._size_struct.unpack(size_buffer)[0]
+        size_read, size_buffer = read_data_from_stream(stream, self._count_struct._size_, align_as=self._align_, origin=origin)
+        size = self._count_struct.unpack(size_buffer)[0]
         data_read, data_buffer = read_data_from_stream(stream, size, align_as=1, origin=origin)
         decoded = data_buffer.decode(self._encoding)
         return size_read + data_read, tuple([decoded])
 
     def __str__(self):
-        return f"Pascal String [{self._size_struct}] ({self._encoding})"
+        return f"Pascal String [{self._count_struct}] ({self._encoding})"
 
 
 class PascalStringDefinition(_PascalString):  # Inheriting Integer allows it to be used without specifying an instance; syntax sugar for std type
@@ -71,11 +73,11 @@ class PascalStringDefinition(_PascalString):  # Inheriting Integer allows it to 
         super().__init__(size_struct=size_struct, encoding=encoding, align_as=align_as)
 
     def __call__(self, align_as: int = None, encoding: str = None) -> PascalString:
-        return self.PascalString(align_as=align_as or self._align_, size_struct=self._size_struct, encoding=encoding or self._encoding)
+        return self.PascalString(align_as=align_as or self._align_, size_struct=self._count_struct, encoding=encoding or self._encoding)
 
     def __eq__(self, other):
         # TODO, check 'same class' or 'sub class'
-        return self._size_struct == other._size_struct and self._encoding == other._encoding
+        return self._count_struct == other._count_struct and self._encoding == other._encoding
 
 
 PString8 = PascalStringDefinition(integer.UInt8)
