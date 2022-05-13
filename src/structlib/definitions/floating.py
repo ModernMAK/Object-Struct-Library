@@ -1,10 +1,11 @@
 # Using IEEE_754
 import math
+import struct
 import sys
-from typing import Tuple, List
+from typing import Tuple, List, BinaryIO
 
-from structlib.protocols import SizeLikeMixin, PackLikeMixin
-
+from structlib.helper import resolve_byteorder, default_if_none
+from structlib.protocols import SizeLikeMixin, PackLikeMixin, AlignLikeMixin, SubStructLikeMixin, WritableBuffer, ReadableBuffer, ArgLikeMixin
 
 # a = Struct( Int8, UInt8, Int32 )
 # Struct( Float * 6, a, 2 * half, 2 * Float )
@@ -208,6 +209,24 @@ from structlib.protocols import SizeLikeMixin, PackLikeMixin
 #         @staticmethod
 #         def _from_bytes(b:bytes) -> float:
 
+# def float2binstr(v: float) -> Tuple[str, str]:
+#     pre = ""
+#     whole = int(v)
+#     while whole > 0:
+#         bit = whole % 2
+#         whole //= 2
+#         pre = str(bit) + pre
+#
+#     post = ""
+#     part = v - whole
+#     while part != 1:
+#         bit = int(part * 2)
+#         part *= 2
+#         post += str(bit)
+#
+#     return pre, post
+from structlib.utils import write_data_to_buffer, read_data_from_buffer, write_data_to_stream, read_data_from_stream
+
 
 class _Float(SizeLikeMixin, PackLikeMixin):
     def __init__(self, *, args: int, size: int, align_as: int = None, byteorder: str = None, exponent_bits: int):
@@ -270,6 +289,59 @@ class FloatDefinition(_Float):
         return self.__size == other.__size and self.__exponent_bits == other.__exponent_bits
 
 
+class _FloatHack(SubStructLikeMixin,SizeLikeMixin):
+    INTERNAL_STRUCTS = {
+        (16, "little"): struct.Struct("<e"),
+        (16, "big"): struct.Struct(">e"),
+
+        (32, "little"): struct.Struct("<f"),
+        (32, "big"): struct.Struct(">f"),
+
+        (64, "little"): struct.Struct("<d"),
+        (64, "big"): struct.Struct(">d"),
+    }
+
+    def __init__(self, bits: int, *, align_as: int = None, byteorder: str = None):
+        SizeLikeMixin.__init__(self, bits // 8)
+        AlignLikeMixin.__init__(self, align_as=align_as, default_align=self._size_)
+        ArgLikeMixin.__init__(self,1)
+        self._byteorder = resolve_byteorder(byteorder)
+        self._internal = self.INTERNAL_STRUCTS[(bits, self._byteorder)]
+
+    def __call__(self, *, align_as: int = None, byteorder: str = None):
+        return _FloatHack(self._size_*8,align_as=default_if_none(align_as,self._align_),byteorder=default_if_none(byteorder,self._byteorder))
+
+    def __str__(self):
+        size = self._size_*8
+        byteorder = f"{self._byteorder[0]}e"
+        align = f" @{self._align_}" if self._align_ != self._size_ else ''
+        return f"Float{size}-{byteorder}{align}"
+
+    def unpack(self, buffer: bytes) -> Tuple[float, ...]:
+        return self._internal.unpack(buffer)
+
+    def pack(self, *args: float) -> bytes:
+        return self._internal.pack(*args)
+
+    def pack_buffer(self, buffer: WritableBuffer, *args: float, offset: int = 0, origin: int = 0) -> int:
+        data = self.pack(*args)
+        return write_data_to_buffer(buffer, data, align_as=self._align_, offset=offset, origin=origin)
+
+    def _unpack_buffer(self, buffer: ReadableBuffer, *, offset: int = 0, origin: int = 0) -> Tuple[int, Tuple[float, ...]]:
+        read, data = read_data_from_buffer(buffer, data_size=self._size_, align_as=self._align_, offset=offset, origin=origin)
+        return read, self.unpack(data)
+
+    def pack_stream(self, stream: BinaryIO, *args: float, origin: int = None) -> int:
+        data = self.pack(*args)
+        return write_data_to_stream(stream, data, align_as=self._align_, origin=origin)
+
+    def _unpack_stream(self, stream: BinaryIO, origin: int = None) -> Tuple[int, Tuple[float, ...]]:
+        data_size = self._size_
+        read_size, data = read_data_from_stream(stream, data_size, align_as=self._align_, origin=origin)
+        # TODO check stream size
+        return read_size, self.unpack(data)
+
+
 # def define_float(size: int, exponent_bits:int) -> FloatDefinition:
 #     # inclusive mantissa INCLUDES the leading bit before the decimal
 #     #   Our algo expects mantissa to be exclusive
@@ -278,8 +350,11 @@ class FloatDefinition(_Float):
 #     return FloatDefinition(size=size, exponent_bits=exponent_bits)
 
 
-Float16 = FloatDefinition(size=2, exponent_bits=5)
-Float32 = FloatDefinition(size=4, exponent_bits=8)
-Float64 = FloatDefinition(size=8, exponent_bits=11)
-Float128 = FloatDefinition(size=16, exponent_bits=15)
-Float256 = FloatDefinition(size=32, exponent_bits=19)
+Float16 = _FloatHack(16)
+Float32 = _FloatHack(32)
+Float64 = _FloatHack(64)
+# Float16 = FloatDefinition(size=2, exponent_bits=5)
+# Float32 = FloatDefinition(size=4, exponent_bits=8)
+# Float64 = FloatDefinition(size=8, exponent_bits=11)
+# Float128 = FloatDefinition(size=16, exponent_bits=15)
+# Float256 = FloatDefinition(size=32, exponent_bits=19)

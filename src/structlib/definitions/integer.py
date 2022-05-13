@@ -15,13 +15,13 @@ class _Integer(SubStructLikeMixin, SizeLikeMixin):
         self._signed = signed
 
     def __eq__(self, other) -> bool:
-        if not isinstance(other,_Integer):
+        if not isinstance(other, _Integer):
             return False
         else:
             return self._byteorder == other._byteorder and self._signed == other._signed and \
-                AlignLikeMixin.__eq__(self, other) and \
-                SizeLikeMixin.__eq__(self, other) and \
-                ArgLikeMixin.__eq__(self, other)
+                   AlignLikeMixin.__eq__(self, other) and \
+                   SizeLikeMixin.__eq__(self, other) and \
+                   ArgLikeMixin.__eq__(self, other)
 
     @property
     def byte_order(self) -> ByteOrderLiteral:
@@ -49,12 +49,6 @@ class _Integer(SubStructLikeMixin, SizeLikeMixin):
     def _unpack_buffer(self, buffer: ReadableBuffer, *, offset: int = 0, origin: int = 0) -> Tuple[int, Tuple[int, ...]]:
         read, data = read_data_from_buffer(buffer, data_size=self._size_, align_as=self._align_, offset=offset, origin=origin)
         return read, self.unpack(data)
-        # read_size = self._size_
-        # if len(buffer) - (offset + origin) < read_size:
-        #     # TODO raise error
-        #     raise NotImplementedError
-        # data = buffer[origin + offset:origin + offset + read_size]
-        # return self._size_, self.unpack(data)
 
     def pack_stream(self, stream: BinaryIO, *args: int, origin: int = None) -> int:
         data = self.pack(*args)
@@ -77,14 +71,16 @@ class IntegerDefinition(_Integer):  # Inheriting Integer allows it to be used wi
         super().__init__(size=size, signed=signed, align_as=align_as, byteorder=byteorder)
 
     def __call__(self, *, align_as: int = None, byteorder: ByteOrder = None) -> Integer:
-        return self.Integer(align_as=default_if_none(align_as, self._align_), byteorder=default_if_none(byteorder, self.byte_order), size=self._size_, signed=self.signed)
+        return self.Integer(align_as=default_if_none(align_as, self._align_), byteorder=default_if_none(byteorder, self.byte_order), size=self._size_, signed=self._signed)
 
     def __str__(self):
-        return f"{'' if self._signed else 'U-'}Int{self._size_ * 8}"
-        # type_str = f"{'' if self.__signed else 'U-'}Int{self.__size * 8}"
-        # tuple_str = '' if self.__args == 1 else f"x{self.__args}"
-        # return f"{type_str}{tuple_str}"
-
+        # This should generate a 'Unique' string per equality, but not used for equality comparisons
+        #   Repr will still use the class <object at id> syntax to clearly state they are different objects.
+        signed = 'Int' if self._signed else 'Uint'
+        size = self._size_ * 8
+        endian = f'{self._byteorder[0]}e'  # HACK, _byteorder should be one of the literals 'l'ittle or 'b'ig
+        align = f'-@{self._align_}' if self._align_ != self._size_ else ''
+        return f"{signed}{size}-{endian}{align}"
 
 
 Int8 = IntegerDefinition(1, True)
@@ -101,6 +97,9 @@ UInt128 = IntegerDefinition(16, False)
 
 if __name__ == "__main__":
     AltInt8 = IntegerDefinition(1, True)
-    print(Int8, Int16, Int32, Int64, UInt8, UInt16, UInt32, UInt64, AltInt8)
+    AltInt8At2 = IntegerDefinition(1, True, align_as=2)
+    print(Int8, Int16, Int32, Int64, UInt8, UInt16, UInt32, UInt64, AltInt8, AltInt8At2)
     print(repr(Int8), "is", repr(AltInt8), ":", (Int8 is AltInt8))
     print(Int8, "==", AltInt8, ":", (Int8 == AltInt8))
+    print(repr(Int8), "is", repr(AltInt8At2), ":", (Int8 is AltInt8At2))
+    print(Int8, "==", AltInt8At2, ":", (Int8 == AltInt8At2))

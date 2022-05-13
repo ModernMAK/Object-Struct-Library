@@ -2,7 +2,7 @@ from typing import Any
 
 from shared import assert_pack_equal, assert_unpack_equal
 from structlib.definitions import integer
-from structlib.definitions.struct import Struct
+from structlib.definitions.structure import Struct
 
 
 def test_struct():

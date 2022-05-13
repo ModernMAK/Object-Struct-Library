@@ -26,6 +26,8 @@ class SizeLike(Protocol):
 
 class SizeLikeMixin:
     def __init__(self, size: int):
+        if size < 1:
+            raise ValueError("Size cannot be < 1! (What struct has no size? Var-sized types should not use SizeLike; this is a FIXED SIZE!)")
         self.__size = size
 
     @property
