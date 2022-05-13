@@ -1,124 +1,103 @@
-import sys
 from typing import Tuple, BinaryIO
 
-from structlib.protocols import SizeLikeMixin, AlignLikeMixin, SubStructLikeMixin
+from structlib.errors import FixedBufferSizeError, ArgCountError
+from structlib.helper import default_if_none, ByteOrder, resolve_byteorder, ByteOrderLiteral
+from structlib.protocols import SizeLikeMixin, AlignLikeMixin, SubStructLikeMixin, ArgLikeMixin, WritableBuffer, ReadableBuffer
+from structlib.utils import write_data_to_buffer, write_data_to_stream, read_data_from_stream, read_data_from_buffer
 
 
-class _Integer(SubStructLikeMixin, SizeLikeMixin, AlignLikeMixin):
-    def __init__(self, reps: int = 1, *, args: int, size: int, align_as: int = None, byteorder: str = None, signed: bool):
-        self.__reps = reps
-        self.__size = size
-        self.__align = align_as or size
-        self.__byteorder = byteorder or sys.byteorder
-        self.__signed = signed
-        self.__args = args
+class _Integer(SubStructLikeMixin, SizeLikeMixin):
+    def __init__(self, *, size: int, signed: bool, align_as: int = None, byteorder: ByteOrder = None):
+        AlignLikeMixin.__init__(self, align_as=align_as, default_align=size)
+        SizeLikeMixin.__init__(self, size=size)
+        ArgLikeMixin.__init__(self, args=1)
+        self._byteorder = resolve_byteorder(byteorder)
+        self._signed = signed
 
-    def _align_(self) -> int:
-        return self.__align
+    def __eq__(self, other) -> bool:
+        if not isinstance(other,_Integer):
+            return False
+        else:
+            return self._byteorder == other._byteorder and self._signed == other._signed and \
+                AlignLikeMixin.__eq__(self, other) and \
+                SizeLikeMixin.__eq__(self, other) and \
+                ArgLikeMixin.__eq__(self, other)
 
-    def _size_(self) -> int:
-        return self.__size * self.__args
+    @property
+    def byte_order(self) -> ByteOrderLiteral:
+        return self._byteorder
 
-    def _args_(self) -> int:
-        return self.__args
-
-    def _reps_(self) -> int:
-        return self.__reps
+    @property
+    def signed(self) -> bool:
+        return self._signed
 
     def unpack(self, buffer: bytes) -> Tuple[int, ...]:
-        if self._size_() != len(buffer):
-            # TODO raise error
-            raise NotImplementedError
-        items = []
-        for rep in range(self.__reps):
-            item = []
-            for arg in range(self.__args):
-                offset = (rep * self.__args + arg)
-                arg_item = int.from_bytes(buffer[offset * self.__size:(offset + 1) * self.__size], byteorder=self.__byteorder, signed=self.__signed)
-                item.append(arg_item)
-            if len(item) == 1:  # Special case; dont use tuple
-                item = item[0]
-            else:
-                item = tuple(item)
-            items.append(item)
-        return tuple(*items)
+        if self._size_ != len(buffer):
+            raise FixedBufferSizeError(len(buffer), self._size_)
+        result = int.from_bytes(buffer, byteorder=self._byteorder, signed=self._signed)
+        return tuple([result])
 
     def pack(self, *args: int) -> bytes:
-        if len(args) != self.__args:
-            # TODO raise error
-            raise NotImplementedError
-        buffer = bytearray()
-        for arg in args:
-            b = arg.to_bytes(self.__size, self.__byteorder, signed=self.__signed)
-            buffer.extend(b)
-        return buffer
+        if len(args) != self._args_():
+            raise ArgCountError(len(args), self._args_())
+        return args[0].to_bytes(self._size_, self._byteorder, signed=self._signed)
 
-    def pack_buffer(self, buffer: bytes, *args: int, offset: int = 0) -> int:
+    def pack_buffer(self, buffer: WritableBuffer, *args: int, offset: int = 0, origin: int = 0) -> int:
         data = self.pack(*args)
-        data_len = len(data)
-        buffer[offset:offset + data_len] = data
-        return data_len
+        return write_data_to_buffer(buffer, data, align_as=self._align_, offset=offset, origin=origin)
 
-    def _unpack_buffer(self, buffer: bytes, *, offset: int = 0) -> Tuple[int, Tuple[int, ...]]:
-        read_size = self.__size * self.__reps * self.__args
-        if len(buffer) < read_size:
-            # TODO raise error
-            raise NotImplementedError
-        data = buffer[offset:offset + read_size]
-        return self.__size, self.unpack(data)
+    def _unpack_buffer(self, buffer: ReadableBuffer, *, offset: int = 0, origin: int = 0) -> Tuple[int, Tuple[int, ...]]:
+        read, data = read_data_from_buffer(buffer, data_size=self._size_, align_as=self._align_, offset=offset, origin=origin)
+        return read, self.unpack(data)
+        # read_size = self._size_
+        # if len(buffer) - (offset + origin) < read_size:
+        #     # TODO raise error
+        #     raise NotImplementedError
+        # data = buffer[origin + offset:origin + offset + read_size]
+        # return self._size_, self.unpack(data)
 
-    def pack_stream(self, stream: BinaryIO, *args: int) -> int:
+    def pack_stream(self, stream: BinaryIO, *args: int, origin: int = None) -> int:
         data = self.pack(*args)
-        return stream.write(data)
+        return write_data_to_stream(stream, data, align_as=self._align_, origin=origin)
 
-    def _unpack_stream(self, stream: BinaryIO) -> Tuple[int, Tuple[int, ...]]:
-        read_size = self.__size * self.__reps * self.__args
+    def _unpack_stream(self, stream: BinaryIO, origin: int = None) -> Tuple[int, Tuple[int, ...]]:
+        data_size = self._size_
+        read_size, data = read_data_from_stream(stream, data_size, align_as=self._align_, origin=origin)
         # TODO check stream size
-        data = stream.read(read_size)
         return read_size, self.unpack(data)
 
 
 class IntegerDefinition(_Integer):  # Inheriting Integer allows it to be used without specifying an instance; syntax sugar for std type
     class Integer(_Integer):
-
         ...
-        # def __init__(self, args: int = 1, *, align_as: int = None, byteorder: str = None, size: int, signed: bool):
-        #     super().__init__(args=args, size=size, signed=signed, align=align_as, byteorder=byteorder)
 
-    def __init__(self, size: int, signed: bool, args: int = 1, *, align_as: int = None, byteorder: str = None):
+    def __init__(self, size: int, signed: bool, *, align_as: int = None, byteorder: ByteOrder = None):
         if size < 1:
             raise NotImplementedError  # Todo raise an error
-        if args < 1:
-            raise NotImplementedError  # Todo raise an error
-        super().__init__(reps=1, args=args, size=size, signed=signed, align_as=align_as, byteorder=byteorder)
-        self.__size = size
-        self.__signed = signed
-        self.__args = args
-        self.__align_as = align_as
-        self.__byteorder = byteorder
+        super().__init__(size=size, signed=signed, align_as=align_as, byteorder=byteorder)
 
-    def __call__(self, reps: int = 1, *, align_as: int = None, byteorder: str = None) -> Integer:
-        return self.Integer(reps=reps, args=self.__args, align_as=align_as or self.__align_as, byteorder=byteorder or self.__byteorder, size=self.__size, signed=self.__signed)
+    def __call__(self, *, align_as: int = None, byteorder: ByteOrder = None) -> Integer:
+        return self.Integer(align_as=default_if_none(align_as, self._align_), byteorder=default_if_none(byteorder, self.byte_order), size=self._size_, signed=self.signed)
 
     def __str__(self):
-        type_str = f"{'' if self.__signed else 'U-'}Int{self.__size * 8}"
-        tuple_str = '' if self.__args == 1 else f"x{self.__args}"
-        return f"{type_str}{tuple_str}"
+        return f"{'' if self._signed else 'U-'}Int{self._size_ * 8}"
+        # type_str = f"{'' if self.__signed else 'U-'}Int{self.__size * 8}"
+        # tuple_str = '' if self.__args == 1 else f"x{self.__args}"
+        # return f"{type_str}{tuple_str}"
 
-    def __eq__(self, other):
-        # TODO, check 'same class' or 'sub class'
-        raise NotImplementedError
 
 
 Int8 = IntegerDefinition(1, True)
 Int16 = IntegerDefinition(2, True)
 Int32 = IntegerDefinition(4, True)
 Int64 = IntegerDefinition(8, True)
+Int128 = IntegerDefinition(16, True)
 
 UInt8 = IntegerDefinition(1, False)
 UInt16 = IntegerDefinition(2, False)
 UInt32 = IntegerDefinition(4, False)
 UInt64 = IntegerDefinition(8, False)
+UInt128 = IntegerDefinition(16, False)
 
 if __name__ == "__main__":
     AltInt8 = IntegerDefinition(1, True)
