@@ -4,110 +4,13 @@ from typing import Protocol, Tuple, Any, BinaryIO, Union
 # Non Exhaustive; most common would be bytes/bytearray
 
 # Most types that allow my_copy = X[index] should be readable
-from structlib.helper import default_if_none
+from structlib.protocols_dir.align import AlignLike, Alignable
+from structlib.protocols_dir.arg import ArgLikeMixin, ArgLike
+from structlib.protocols_dir.size import SizeLike
 
 ReadableBuffer = Union[bytes, bytearray]
 # Most types that allow X[index] = new_value should be writable
 WritableBuffer = Union[bytearray]
-
-
-class SizeLike(Protocol):
-    """
-    Exposes the fixed size of a struct
-    """
-
-    @property
-    def _size_(self) -> int:
-        """
-        The fixed size of the struct
-        """
-        ...
-
-
-class SizeLikeMixin:
-    def __init__(self, size: int):
-        if size < 1:
-            raise ValueError("Size cannot be < 1! (What struct has no size? Var-sized types should not use SizeLike; this is a FIXED SIZE!)")
-        self.__size = size
-
-    @property
-    def _size_(self) -> int:
-        return self.__size
-
-    def __eq__(self, other) -> bool:
-        if not isinstance(other, SizeLikeMixin):
-            return False
-        else:
-            return self.__size == other.__size
-
-
-class AlignLike(Protocol):
-    """
-    Exposes the alignment of a struct
-    """
-
-    @property
-    def _align_(self) -> int:
-        """
-        The alignment (in bytes) the struct will align to
-        """
-        ...
-
-    @_align_.setter
-    def _align_(self, alignment: int) -> None:
-        """
-        Sets the alignment of this type.
-        :param alignment: The desired alignment (in bytes) the struct will align to
-        """
-        ...
-
-
-class AlignLikeMixin:
-    def __init__(self, align_as: int, default_align: int = None):
-        align_as = default_if_none(align_as, default_align)
-        if align_as is None:
-            raise ValueError("No alignment specified!")
-        if align_as <= 0:
-            raise ValueError("Alignment cannot be <= 0!")
-        self.__alignment = align_as or default_align
-
-    def __eq__(self, other) -> bool:
-        if not isinstance(other, AlignLikeMixin):
-            return False
-        else:
-            return self.__alignment == other.__alignment
-
-    @property
-    def _align_(self) -> int:
-        return self.__alignment
-
-    @_align_.setter
-    def _align_(self, alignment: int) -> None:
-        self.__alignment = alignment
-
-
-class ArgLike(Protocol):
-    """
-    The # of fields this structure holds
-    """
-
-    def _args_(self) -> int:
-        """ The # of fields this structure expects """
-        ...
-
-
-class ArgLikeMixin:
-    def __init__(self, args: int):
-        self.__args = args
-
-    def _args_(self) -> int:
-        return self.__args
-
-    def __eq__(self, other) -> bool:
-        if not isinstance(other, ArgLikeMixin):
-            return False
-        else:
-            return self.__args == other.__args
 
 
 class PackLike(Protocol):
@@ -235,7 +138,7 @@ class SubStructLike(AlignLike, BufferPackLike, StreamPackLike, PackLike, ArgLike
     ...
 
 
-class SubStructLikeMixin(AlignLikeMixin, BufferPackLikeMixin, StreamPackLikeMixin, PackLikeMixin, ArgLikeMixin, ABC):
+class SubStructLikeMixin(Alignable, BufferPackLikeMixin, StreamPackLikeMixin, PackLikeMixin, ArgLikeMixin, ABC):
     # def __init__(self, *pos_args, align_as: int = None, default_align:int = None, args:int = 1, **kwargs):
     #     super(AlignLikeMixin).__init__(align_as=align_as,default_align=default_align)
     #     super(ArgLikeMixin).__init__(args=args)

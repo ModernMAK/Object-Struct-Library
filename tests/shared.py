@@ -1,4 +1,5 @@
 import math
+import random
 from io import BytesIO
 from typing import Any, List, Union, Tuple
 
@@ -122,3 +123,9 @@ def assert_unpack_stream_equal(l: StreamPackLike, r: StreamPackLike, buffer: byt
             rs.seek(offset + origin)
             lp, rp = l.unpack_stream(ls, origin=origin), r.unpack_stream(rs, origin=origin)
             assert_array(lp, rp, use_close=use_close)
+
+
+def generate_random_chunks(chunk_size, chunk_count, seed: int):
+    r = random.Random(seed)
+    for _ in range(chunk_count):
+        yield r.randbytes(chunk_size)

@@ -1,16 +1,18 @@
-from typing import Tuple, BinaryIO
+from typing import Tuple
 
-from structlib.errors import FixedBufferSizeError, ArgCountError
+from structlib.definitions.common import PrimitiveStructMixin
+from structlib.errors import FixedBufferSizeError
 from structlib.helper import default_if_none, ByteOrder, resolve_byteorder, ByteOrderLiteral
-from structlib.protocols import SizeLikeMixin, AlignLikeMixin, SubStructLikeMixin, ArgLikeMixin, WritableBuffer, ReadableBuffer
-from structlib.utils import write_data_to_buffer, write_data_to_stream, read_data_from_stream, read_data_from_buffer
+from structlib.protocols_dir.arg import ArgLikeMixin
+from structlib.protocols_dir.size import SizeLikeMixin
+from structlib.protocols_dir.align import Alignable
 
 
-class _Integer(SubStructLikeMixin, SizeLikeMixin):
+class _Integer(PrimitiveStructMixin):
+    _typing_ = int
+
     def __init__(self, *, size: int, signed: bool, align_as: int = None, byteorder: ByteOrder = None):
-        AlignLikeMixin.__init__(self, align_as=align_as, default_align=size)
-        SizeLikeMixin.__init__(self, size=size)
-        ArgLikeMixin.__init__(self, args=1)
+        PrimitiveStructMixin.__init__(self, align_as=align_as, size=size)
         self._byteorder = resolve_byteorder(byteorder)
         self._signed = signed
 
@@ -19,7 +21,7 @@ class _Integer(SubStructLikeMixin, SizeLikeMixin):
             return False
         else:
             return self._byteorder == other._byteorder and self._signed == other._signed and \
-                   AlignLikeMixin.__eq__(self, other) and \
+                   Alignable.__eq__(self, other) and \
                    SizeLikeMixin.__eq__(self, other) and \
                    ArgLikeMixin.__eq__(self, other)
 
@@ -31,34 +33,13 @@ class _Integer(SubStructLikeMixin, SizeLikeMixin):
     def signed(self) -> bool:
         return self._signed
 
-    def unpack(self, buffer: bytes) -> Tuple[int, ...]:
-        if self._size_ != len(buffer):
-            raise FixedBufferSizeError(len(buffer), self._size_)
+    def _unpack(self, buffer: bytes) -> Tuple[int, ...]:
         result = int.from_bytes(buffer, byteorder=self._byteorder, signed=self._signed)
         return tuple([result])
 
-    def pack(self, *args: int) -> bytes:
-        if len(args) != self._args_():
-            raise ArgCountError(len(args), self._args_())
-        return args[0].to_bytes(self._size_, self._byteorder, signed=self._signed)
-
-    def pack_buffer(self, buffer: WritableBuffer, *args: int, offset: int = 0, origin: int = 0) -> int:
-        data = self.pack(*args)
-        return write_data_to_buffer(buffer, data, align_as=self._align_, offset=offset, origin=origin)
-
-    def _unpack_buffer(self, buffer: ReadableBuffer, *, offset: int = 0, origin: int = 0) -> Tuple[int, Tuple[int, ...]]:
-        read, data = read_data_from_buffer(buffer, data_size=self._size_, align_as=self._align_, offset=offset, origin=origin)
-        return read, self.unpack(data)
-
-    def pack_stream(self, stream: BinaryIO, *args: int, origin: int = None) -> int:
-        data = self.pack(*args)
-        return write_data_to_stream(stream, data, align_as=self._align_, origin=origin)
-
-    def _unpack_stream(self, stream: BinaryIO, origin: int = None) -> Tuple[int, Tuple[int, ...]]:
-        data_size = self._size_
-        read_size, data = read_data_from_stream(stream, data_size, align_as=self._align_, origin=origin)
-        # TODO check stream size
-        return read_size, self.unpack(data)
+    def _pack(self, *args: int) -> bytes:
+        empty = bytearray()
+        return empty.join([_.to_bytes(self._size_, self._byteorder, signed=self._signed) for _ in args])
 
 
 class IntegerDefinition(_Integer):  # Inheriting Integer allows it to be used without specifying an instance; syntax sugar for std type

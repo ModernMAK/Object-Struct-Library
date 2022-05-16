@@ -1,7 +1,9 @@
+import math
+import struct
 import sys
 from typing import List, Literal
 
-from shared import assert_pack_equal, assert_unpack_equal, assert_pack_buffer_equal, assert_unpack_buffer_equal, assert_pack_like, assert_buffer_pack_like, assert_stream_pack_like, assert_pack_stream_equal, assert_unpack_stream_equal
+from shared import assert_pack_equal, assert_unpack_equal, assert_pack_buffer_equal, assert_unpack_buffer_equal, assert_pack_like, assert_buffer_pack_like, assert_stream_pack_like, assert_pack_stream_equal, assert_unpack_stream_equal, generate_random_chunks
 from structlib.definitions import floating
 from structlib.definitions.floating import _FloatHack as FloatDefinition, _FloatHack  # _FloatHack currently contains the code to convert floats to/from bytes which we will need even after FloatDefinition is properly implemented
 from structlib.enums import Endian
@@ -12,6 +14,16 @@ DEFAULT_OFFSETS = [0, 1, 2, 4, 8]  # Normal power sequence
 DEFAULT_ALIGNS = [1, 2, 4, 8]  # 0 not acceptable alignment
 DEFAULT_ORIGINS = [0, 1, 2, 4, 8]
 DEFAULT_SAMPLES = 16  # Keep it low for faster; less comprehensive, tests
+DEFAULT_SEED = 867 - 5309
+TEST_SEEDS = {
+    16: 123,
+    32: 456,
+    64: 789
+}
+
+
+def get_test_seed(size: int):
+    return TEST_SEEDS.get(size, DEFAULT_SEED)
 
 
 def generate_subnormal_data(samples: int = DEFAULT_SAMPLES):
@@ -19,10 +31,10 @@ def generate_subnormal_data(samples: int = DEFAULT_SAMPLES):
         yield _ / samples
 
 
-def generate_special_data():
+def generate_special_cases():
     yield float("inf")
     yield float("-inf")
-    yield float("nan")
+    # yield float("nan") # Must be handled seperately because nan isn't close to itself
 
 
 def generate_data(min: float, max: float, samples: int = DEFAULT_SAMPLES):
@@ -31,13 +43,38 @@ def generate_data(min: float, max: float, samples: int = DEFAULT_SAMPLES):
         yield _ * step + min
 
 
-def generate_all_data(min: float, max: float, samples: int = DEFAULT_SAMPLES):
+# Generates at least 6 samples; 3 + (samples//3)*3 samples
+def generate_all_data(min: float, max: float, data_size: int, seed: int = None, samples: int = DEFAULT_SAMPLES):
+    samples -= 3  # nan, inf, -inf
+    samples //= 2
+    if samples < 1:
+        samples = 1
+
     for _ in generate_data(min, max, samples):
         yield _
     for _ in generate_subnormal_data(samples):
         yield _
-    for _ in generate_special_data():
+    for _ in generate_special_cases():
         yield _
+    for _ in generate_random_data(data_size, samples, seed):
+        yield _
+
+
+_F16 = struct.Struct("e")
+_F32 = struct.Struct("f")
+_F64 = struct.Struct("d")
+_F = {16: _F16, 32: _F32, 64: _F64}
+
+
+def generate_random_data(size: int, samples: int, seed: int = None):
+    seed = seed if not None else get_test_seed(size)
+    f = _F[size]
+    for _ in generate_random_chunks(size // 8, samples, seed):
+        result = f.unpack(_)[0]
+        # TODO / HACK; our current test's don't support nan
+        #   If our random bytes
+        if not math.isnan(result):
+            yield result
 
 
 def test_float_16():
@@ -61,7 +98,7 @@ def default_float_test(size, definition: FloatDefinition = None):
     # DATA = list(range(0, (1 << 64), (1 << 56)))
     # This ensures our #s are representable in our precision
     # HACK: This is dangerous since we don't account for values not representable.
-    DATA = list(from_bytes(to_bytes(_, SIZE, BYTEORDER), SIZE, BYTEORDER) for _ in generate_data(-12345.09876, 12345.09876))
+    DATA = list(from_bytes(to_bytes(_, SIZE, BYTEORDER), SIZE, BYTEORDER) for _ in generate_all_data(-12345.09876, 12345.09876, data_size=size))
     OFFSETS = DEFAULT_OFFSETS
     ORIGINS = DEFAULT_ORIGINS
     ALIGNS = DEFAULT_ALIGNS

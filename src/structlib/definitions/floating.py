@@ -4,8 +4,12 @@ import struct
 import sys
 from typing import Tuple, List, BinaryIO
 
+from structlib.definitions.common import PrimitiveStructMixin
 from structlib.helper import resolve_byteorder, default_if_none
-from structlib.protocols import SizeLikeMixin, PackLikeMixin, AlignLikeMixin, SubStructLikeMixin, WritableBuffer, ReadableBuffer, ArgLikeMixin
+from structlib.protocols import PackLikeMixin, SubStructLikeMixin, WritableBuffer, ReadableBuffer
+from structlib.protocols_dir.arg import ArgLikeMixin
+from structlib.protocols_dir.size import SizeLikeMixin
+from structlib.protocols_dir.align import Alignable
 
 # a = Struct( Int8, UInt8, Int32 )
 # Struct( Float * 6, a, 2 * half, 2 * Float )
@@ -289,7 +293,7 @@ class FloatDefinition(_Float):
         return self.__size == other.__size and self.__exponent_bits == other.__exponent_bits
 
 
-class _FloatHack(SubStructLikeMixin,SizeLikeMixin):
+class _FloatHack(PrimitiveStructMixin):
     INTERNAL_STRUCTS = {
         (16, "little"): struct.Struct("<e"),
         (16, "big"): struct.Struct(">e"),
@@ -302,9 +306,7 @@ class _FloatHack(SubStructLikeMixin,SizeLikeMixin):
     }
 
     def __init__(self, bits: int, *, align_as: int = None, byteorder: str = None):
-        SizeLikeMixin.__init__(self, bits // 8)
-        AlignLikeMixin.__init__(self, align_as=align_as, default_align=self._size_)
-        ArgLikeMixin.__init__(self,1)
+        PrimitiveStructMixin.__init__(self, size=bits // 8,align_as=align_as)
         self._byteorder = resolve_byteorder(byteorder)
         self._internal = self.INTERNAL_STRUCTS[(bits, self._byteorder)]
 
@@ -317,29 +319,11 @@ class _FloatHack(SubStructLikeMixin,SizeLikeMixin):
         align = f" @{self._align_}" if self._align_ != self._size_ else ''
         return f"Float{size}-{byteorder}{align}"
 
-    def unpack(self, buffer: bytes) -> Tuple[float, ...]:
+    def _unpack(self, buffer: bytes) -> Tuple[float, ...]:
         return self._internal.unpack(buffer)
 
-    def pack(self, *args: float) -> bytes:
+    def _pack(self, *args: float) -> bytes:
         return self._internal.pack(*args)
-
-    def pack_buffer(self, buffer: WritableBuffer, *args: float, offset: int = 0, origin: int = 0) -> int:
-        data = self.pack(*args)
-        return write_data_to_buffer(buffer, data, align_as=self._align_, offset=offset, origin=origin)
-
-    def _unpack_buffer(self, buffer: ReadableBuffer, *, offset: int = 0, origin: int = 0) -> Tuple[int, Tuple[float, ...]]:
-        read, data = read_data_from_buffer(buffer, data_size=self._size_, align_as=self._align_, offset=offset, origin=origin)
-        return read, self.unpack(data)
-
-    def pack_stream(self, stream: BinaryIO, *args: float, origin: int = None) -> int:
-        data = self.pack(*args)
-        return write_data_to_stream(stream, data, align_as=self._align_, origin=origin)
-
-    def _unpack_stream(self, stream: BinaryIO, origin: int = None) -> Tuple[int, Tuple[float, ...]]:
-        data_size = self._size_
-        read_size, data = read_data_from_stream(stream, data_size, align_as=self._align_, origin=origin)
-        # TODO check stream size
-        return read_size, self.unpack(data)
 
 
 # def define_float(size: int, exponent_bits:int) -> FloatDefinition:

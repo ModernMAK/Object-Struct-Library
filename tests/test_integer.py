@@ -2,10 +2,11 @@ import math
 import sys
 from typing import List, Literal
 
-from shared import assert_pack_equal, assert_unpack_equal, assert_pack_buffer_equal, assert_unpack_buffer_equal, assert_pack_like, assert_buffer_pack_like, assert_stream_pack_like, assert_pack_stream_equal, assert_unpack_stream_equal
+from shared import assert_pack_equal, assert_unpack_equal, assert_pack_buffer_equal, assert_unpack_buffer_equal, assert_pack_like, assert_buffer_pack_like, assert_stream_pack_like, assert_pack_stream_equal, assert_unpack_stream_equal, generate_random_chunks
 from structlib.definitions import integer
 from structlib.definitions.integer import IntegerDefinition
 from structlib.enums import Endian
+from structlib.helper import ByteOrderLiteral
 from structlib.utils import calculate_padding, align_of
 
 DEFAULT_OFFSETS = [0, 1, 2, 4, 8]  # Normal power sequence
@@ -13,8 +14,22 @@ DEFAULT_ALIGNS = [1, 2, 4, 8]  # 0 not acceptable alignment
 DEFAULT_ORIGINS = [0, 1, 2, 4, 8]
 DEFAULT_SAMPLES = 16  # Keep it low for faster; less comprehensive, tests
 
+DEFAULT_SEED = 867 - 5309
+TEST_SEEDS = {
+    # For funsies, let's just try DEFAULT_SEED for
+    # (8, True): 135,
+    # (16, True): 123,
+    # (32, True): 123,
+    # (64, True): 123,
+    # (16, True): 123,
+}
 
-def generate_data(size: int, signed: bool, samples: int = DEFAULT_SAMPLES):
+
+def get_test_seed(size: int, signed: bool):
+    return TEST_SEEDS.get((size,signed), DEFAULT_SEED)
+
+
+def generate_range_data(size: int, signed: bool, samples: int = DEFAULT_SAMPLES):
     min_val = 0
     delta = max_val = (1 << (8 * size))
     if signed:
@@ -24,6 +39,23 @@ def generate_data(size: int, signed: bool, samples: int = DEFAULT_SAMPLES):
     step = int(math.floor(delta / (samples - 1)))
     step = 1 if step <= 0 else step
     return list(range(min_val, max_val, step))
+
+
+def generate_random_data(size: int, signed: bool, byteorder: ByteOrderLiteral, samples: int = DEFAULT_SAMPLES, seed: int = None):
+    seed = seed if not None else get_test_seed(size, signed)
+    for _ in generate_random_chunks(size // 8, samples, seed):
+        yield int.from_bytes(_, byteorder, signed=signed)
+
+
+def generate_data(size: int, signed: bool, byteorder: ByteOrderLiteral, samples: int = DEFAULT_SAMPLES, seed: int = None):
+    samples //= 2
+    if samples < 1:
+        samples = 1
+
+    for _ in generate_range_data(size, signed, samples):
+        yield _
+    for _ in generate_random_data(size, signed, byteorder, samples, seed):
+        yield _
 
 
 def test_int8():
@@ -74,7 +106,7 @@ def default_integer_test(size, signed, definition: IntegerDefinition = None):
     SIGNED = signed
     BYTEORDER = sys.byteorder
     # DATA = list(range(0, (1 << 64), (1 << 56)))
-    DATA = generate_data(SIZE, SIGNED)
+    DATA = list(generate_data(SIZE, SIGNED,BYTEORDER))
     OFFSETS = DEFAULT_OFFSETS
     ORIGINS = DEFAULT_ORIGINS
     ALIGNS = DEFAULT_ALIGNS
