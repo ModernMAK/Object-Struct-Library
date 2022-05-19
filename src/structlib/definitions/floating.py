@@ -1,15 +1,9 @@
 # Using IEEE_754
-import math
 import struct
 import sys
-from typing import Tuple, List, BinaryIO
+from typing import Tuple
 
-from structlib.definitions.common import PrimitiveStructMixin
-from structlib.helper import resolve_byteorder, default_if_none
-from structlib.protocols import PackLikeMixin, SubStructLikeMixin, WritableBuffer, ReadableBuffer
-from structlib.protocols_dir.arg import ArgLikeMixin
-from structlib.protocols_dir.size import SizeLikeMixin
-from structlib.protocols_dir.align import Alignable
+
 
 # a = Struct( Int8, UInt8, Int32 )
 # Struct( Float * 6, a, 2 * half, 2 * Float )
@@ -229,7 +223,10 @@ from structlib.protocols_dir.align import Alignable
 #         post += str(bit)
 #
 #     return pre, post
-from structlib.utils import write_data_to_buffer, read_data_from_buffer, write_data_to_stream, read_data_from_stream
+from structlib.byteorder import resolve_byteorder
+from structlib.definitions.common import PrimitiveStructMixin
+from structlib.protocols import SizeLikeMixin, PackLikeMixin, UnpackResult
+from structlib.utils import default_if_none
 
 
 class _Float(SizeLikeMixin, PackLikeMixin):
@@ -319,8 +316,8 @@ class _FloatHack(PrimitiveStructMixin):
         align = f" @{self._align_}" if self._align_ != self._size_ else ''
         return f"Float{size}-{byteorder}{align}"
 
-    def _unpack(self, buffer: bytes) -> Tuple[float, ...]:
-        return self._internal.unpack(buffer)
+    def _unpack(self, buffer: bytes) -> UnpackResult:
+        return UnpackResult(len(buffer),*self._internal.unpack(buffer))
 
     def _pack(self, *args: float) -> bytes:
         return self._internal.pack(*args)

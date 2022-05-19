@@ -2,10 +2,9 @@ from typing import Tuple, BinaryIO, Any
 
 from structlib.definitions import integer
 from structlib.definitions.common import PrimitiveStructMixin
-from structlib.helper import default_if_none
-from structlib.protocols import PackAndSizeLike, SubStructLikeMixin, WritableBuffer, ReadableBuffer
-from structlib.protocols_dir import Alignable, ArgLikeMixin, size_of, align_of
-from structlib.utils import write_data_to_buffer, read_data_from_buffer, read_data_from_stream, write_data_to_stream
+from structlib.protocols import ReadableBuffer, WritableBuffer, ArgLikeMixin, Alignable, size_of, align_of, UnpackResult
+from structlib.protocols_old import PackAndSizeLike, read_data_from_stream, write_data_to_stream, read_data_from_buffer, write_data_to_buffer, SubStructLikeMixin
+from structlib.utils import default_if_none
 
 
 class StringBuffer(PrimitiveStructMixin):
@@ -43,8 +42,8 @@ class StringBuffer(PrimitiveStructMixin):
             buf.extend([0x00] * (self._size_ - len(buf)))
         return buf
 
-    def _unpack(self, buffer: bytes) -> Tuple[str, ...]:
-        return tuple([buffer.decode(encoding=self._encoding)])
+    def _unpack(self, buffer: bytes) -> UnpackResult:
+        return UnpackResult(len(buffer),buffer.decode(encoding=self._encoding))
 
     def __str__(self):
         return f"String [{size_of(self)}] ({self._encoding})"
@@ -56,9 +55,8 @@ class CStringBuffer(StringBuffer):
 
     Otherwise, it functions identically to StringBuffer
     """
-    def _unpack(self, buffer: bytes) -> Tuple[str, ...]:
-        results = super(CStringBuffer, self)._unpack(buffer)
-        return tuple([_.rstrip("\0") for _ in results])
+    def _unpack(self, buffer: bytes) -> UnpackResult:
+        return UnpackResult(len(buffer),buffer.decode(encoding=self._encoding).rstrip("\0"))
 
     def __str__(self):
         return f"CString [{size_of(self)}] ({self._encoding})"

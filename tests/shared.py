@@ -1,9 +1,8 @@
 import math
-import random
 from io import BytesIO
 from typing import Any, List, Union, Tuple
 
-from structlib.protocols import PackLike, BufferPackLike, ReadableBuffer, StreamPackLike
+from structlib.protocols import ReadableBuffer, PackLike, BufferPackLike, StreamPackLike
 
 
 def assert_array(l: Union[List, Tuple, bytearray, bytes], r: Union[List, Tuple, bytearray, bytes], *, use_close: bool = False):
@@ -50,12 +49,12 @@ def assert_pack_like(pack_like: PackLike, expected: ReadableBuffer, *args: Any, 
     packed = pack_like.pack(*args)
     assert_array(packed, expected, use_close=use_close)
 
-    unpacked = pack_like.unpack(expected)
+    unpacked = pack_like.unpack(expected).values
     assert_array(unpacked, args, use_close=use_close)
 
 
 def assert_unpack_equal(l: PackLike, r: PackLike, buffer: bytes, use_close: bool = False):
-    lp, rp = l.unpack(buffer), r.unpack(buffer)
+    lp, rp = l.unpack(buffer).values, r.unpack(buffer).values
     assert_array(lp, rp, use_close=use_close)
 
 
@@ -69,7 +68,7 @@ def assert_buffer_pack_like(buffer_pack_like: BufferPackLike, expected: Readable
     written = buffer_pack_like.pack_buffer(write_buffer, *args, offset=offset, origin=origin)
     assert_subarray(write_buffer, expected, offset + origin, offset + origin + written - 1, use_close)  # -1 to make inclusive
 
-    unpacked = buffer_pack_like.unpack_buffer(expected, offset=offset, origin=origin)
+    unpacked = buffer_pack_like.unpack_buffer(expected, offset=offset, origin=origin).values
     assert_array(unpacked, args, use_close=use_close)
 
 
@@ -82,7 +81,7 @@ def assert_pack_buffer_equal(l: BufferPackLike, r: BufferPackLike, init_buffer: 
 
 def assert_unpack_buffer_equal(l: BufferPackLike, r: BufferPackLike, buffer: bytes, offset=None, origin=None, use_close: bool = False):
     lp, rp = l.unpack_buffer(buffer, offset=offset, origin=origin), r.unpack_buffer(buffer, offset=offset, origin=origin)
-    assert_array(lp, rp, use_close=use_close)
+    assert_array(lp.values, rp.values, use_close=use_close)
 
 
 def assert_stream_pack_like(stream_pack_like: StreamPackLike, expected: ReadableBuffer, *args: Any, offset: int = None, origin: int = None, use_close: bool = False):
@@ -96,7 +95,7 @@ def assert_stream_pack_like(stream_pack_like: StreamPackLike, expected: Readable
 
     with BytesIO(expected) as read_stream:
         read_stream.seek(origin + offset)  # emulate offset
-        unpacked = stream_pack_like.unpack_stream(read_stream, origin=origin)
+        unpacked = stream_pack_like.unpack_stream(read_stream, origin=origin).values
         assert_array(unpacked, args, use_close=use_close)
 
 
@@ -122,10 +121,6 @@ def assert_unpack_stream_equal(l: StreamPackLike, r: StreamPackLike, buffer: byt
         with BytesIO(buffer) as rs:
             rs.seek(offset + origin)
             lp, rp = l.unpack_stream(ls, origin=origin), r.unpack_stream(rs, origin=origin)
-            assert_array(lp, rp, use_close=use_close)
+            assert_array(lp.values, rp.values, use_close=use_close)
 
 
-def generate_random_chunks(chunk_size, chunk_count, seed: int):
-    r = random.Random(seed)
-    for _ in range(chunk_count):
-        yield r.randbytes(chunk_size)

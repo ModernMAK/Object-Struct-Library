@@ -1,16 +1,25 @@
-from abc import ABC
-from typing import Protocol, Tuple, Any, BinaryIO, Union
-
-# Non Exhaustive; most common would be bytes/bytearray
-
-# Most types that allow my_copy = X[index] should be readable
-from structlib.protocols_dir.align import AlignLike, Alignable
-from structlib.protocols_dir.arg import ArgLikeMixin, ArgLike
-from structlib.protocols_dir.size import SizeLike
+from typing import Union, Protocol, Any, Tuple, BinaryIO
+from dataclasses import dataclass
 
 ReadableBuffer = Union[bytes, bytearray]
-# Most types that allow X[index] = new_value should be writable
 WritableBuffer = Union[bytearray]
+
+
+@dataclass
+class UnpackResult:
+    bytes_read: int
+    values: Tuple[Any]
+
+    # Dataclass won't generate __init__ since we define one (according to docs)
+    def __init__(self, read: int, *values: Any):
+        self.bytes_read = read
+        self.values = values
+
+    def __iter__(self):
+        return iter(self.values)
+
+    def __getitem__(self, index: int):
+        return self.values[index]
 
 
 class PackLike(Protocol):
@@ -27,8 +36,8 @@ class PackLike(Protocol):
         """
         ...
 
-    def unpack(self, buffer: bytes) -> Tuple[Any, ...]:
-        """ 
+    def unpack(self, buffer: bytes) -> UnpackResult:
+        """
         Unpacks the structure from it's byte format
         :raises: UnpackError: A special error occurred while unpacking.
         """
@@ -61,10 +70,7 @@ class BufferPackLike(Protocol):
         """
         ...
 
-    def _unpack_buffer(self, buffer: ReadableBuffer, *, offset: int = 0, origin: int = 0) -> Tuple[int, Tuple[Any, ...]]:
-        ...
-
-    def unpack_buffer(self, buffer: ReadableBuffer, *, offset: int = 0, origin: int = 0) -> Tuple[Any, ...]:
+    def unpack_buffer(self, buffer: ReadableBuffer, *, offset: int = 0, origin: int = 0) -> UnpackResult:
         """
         Unpacks arguments from the buffer.
 
@@ -80,11 +86,8 @@ class BufferPackLikeMixin:
     def pack_buffer(self, buffer: bytes, *args: Any, offset: int = 0, origin: int = 0) -> int:
         raise NotImplementedError
 
-    def _unpack_buffer(self, buffer: bytes, *, offset: int = 0, origin: int = 0) -> Tuple[int, Tuple[Any, ...]]:
+    def unpack_buffer(self, buffer: bytes, *, offset: int = 0, origin: int = 0) -> UnpackResult:
         raise NotImplementedError
-
-    def unpack_buffer(self, buffer: bytes, *, offset: int = 0, origin: int = 0) -> Tuple[Any, ...]:
-        return self._unpack_buffer(buffer, offset=offset, origin=origin)[1]
 
 
 class StreamPackLike(Protocol):
@@ -98,17 +101,7 @@ class StreamPackLike(Protocol):
         """
         ...
 
-    def _unpack_stream(self, stream: BinaryIO, origin: int = None) -> Tuple[int, Tuple[Any, ...]]:
-        """
-        Unpacks the structure from the stream,
-
-        :param stream:
-        :param origin: The position to use in the stream as the start of the structure. None will use the current position in the stream.
-        :return:
-        """
-        ...
-
-    def unpack_stream(self, stream: BinaryIO, origin: int = None) -> Tuple[Any, ...]:
+    def unpack_stream(self, stream: BinaryIO, origin: int = None) -> UnpackResult:
         """
         Unpacks the structure from the stream,
 
@@ -123,23 +116,5 @@ class StreamPackLikeMixin:
     def pack_stream(self, stream: BinaryIO, *args: Any, origin: int = None) -> int:
         raise NotImplementedError
 
-    def _unpack_stream(self, stream: BinaryIO, origin: int = None) -> Tuple[int, Tuple[Any, ...]]:
+    def unpack_stream(self, stream: BinaryIO, origin: int = None) -> UnpackResult:
         raise NotImplementedError
-
-    def unpack_stream(self, stream: BinaryIO, origin: int = None) -> Tuple[Any, ...]:
-        return self._unpack_stream(stream, origin=origin)[1]
-
-
-class PackAndSizeLike(PackLike, SizeLike):
-    ...
-
-
-class SubStructLike(AlignLike, BufferPackLike, StreamPackLike, PackLike, ArgLike):
-    ...
-
-
-class SubStructLikeMixin(Alignable, BufferPackLikeMixin, StreamPackLikeMixin, PackLikeMixin, ArgLikeMixin, ABC):
-    # def __init__(self, *pos_args, align_as: int = None, default_align:int = None, args:int = 1, **kwargs):
-    #     super(AlignLikeMixin).__init__(align_as=align_as,default_align=default_align)
-    #     super(ArgLikeMixin).__init__(args=args)
-    ...

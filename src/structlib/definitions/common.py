@@ -1,11 +1,8 @@
 from abc import ABC
-from typing import Tuple, BinaryIO, Any
-
-from structlib.protocols import SubStructLikeMixin, WritableBuffer, ReadableBuffer
-from structlib.protocols_dir.arg import ArgLikeMixin
-from structlib.protocols_dir.size import SizeLikeMixin
-from structlib.protocols_dir.align import Alignable
-from structlib.utils import write_data_to_buffer, read_data_from_buffer, write_data_to_stream, read_data_from_stream
+from typing import BinaryIO, Any
+from structlib.protocols import SizeLikeMixin, Alignable, ArgLikeMixin, UnpackResult
+from structlib.protocols.pack import WritableBuffer, ReadableBuffer
+from structlib.protocols_old import SubStructLikeMixin, write_data_to_buffer, read_data_from_buffer, write_data_to_stream, read_data_from_stream
 
 
 class PrimitiveStructMixin(SubStructLikeMixin, SizeLikeMixin, ABC):
@@ -27,10 +24,10 @@ class PrimitiveStructMixin(SubStructLikeMixin, SizeLikeMixin, ABC):
         self.assert_args(len(args))
         return self._pack(*args)
 
-    def _unpack(self, buffer: bytes) -> Tuple[Any,...]:
+    def _unpack(self, buffer: bytes) -> UnpackResult:
         raise NotImplementedError
 
-    def unpack(self, buffer:bytes) -> Tuple[Any,...]:
+    def unpack(self, buffer: bytes) -> UnpackResult:
         self.assert_size(len(buffer))
         return self._unpack(buffer)
 
@@ -38,16 +35,16 @@ class PrimitiveStructMixin(SubStructLikeMixin, SizeLikeMixin, ABC):
         data = self.pack(*args)
         return write_data_to_buffer(buffer, data, align_as=self._align_, offset=offset, origin=origin)
 
-    def _unpack_buffer(self, buffer: ReadableBuffer, *, offset: int = 0, origin: int = 0) -> Tuple[int, Tuple[int, ...]]:
+    def unpack_buffer(self, buffer: ReadableBuffer, *, offset: int = 0, origin: int = 0) -> UnpackResult:
         read, data = read_data_from_buffer(buffer, data_size=self._size_, align_as=self._align_, offset=offset, origin=origin)
-        return read, self.unpack(data)
+        return UnpackResult(read, *self._unpack(data).values)
 
     def pack_stream(self, stream: BinaryIO, *args: int, origin: int = None) -> int:
         data = self.pack(*args)
         return write_data_to_stream(stream, data, align_as=self._align_, origin=origin)
 
-    def _unpack_stream(self, stream: BinaryIO, origin: int = None) -> Tuple[int, Tuple[int, ...]]:
+    def unpack_stream(self, stream: BinaryIO, origin: int = None) -> UnpackResult:
         data_size = self._size_
         read_size, data = read_data_from_stream(stream, data_size, align_as=self._align_, origin=origin)
         # TODO check stream size
-        return read_size, self.unpack(data)
+        return UnpackResult(read_size, *self._unpack(data).values)

@@ -1,11 +1,7 @@
-from typing import Tuple
-
+from structlib.byteorder import resolve_byteorder, ByteOrder, ByteOrderLiteral
 from structlib.definitions.common import PrimitiveStructMixin
-from structlib.errors import FixedBufferSizeError
-from structlib.helper import default_if_none, ByteOrder, resolve_byteorder, ByteOrderLiteral
-from structlib.protocols_dir.arg import ArgLikeMixin
-from structlib.protocols_dir.size import SizeLikeMixin
-from structlib.protocols_dir.align import Alignable
+from structlib.protocols import Alignable, SizeLikeMixin, ArgLikeMixin, UnpackResult
+from structlib.utils import default_if_none
 
 
 class _Integer(PrimitiveStructMixin):
@@ -33,9 +29,9 @@ class _Integer(PrimitiveStructMixin):
     def signed(self) -> bool:
         return self._signed
 
-    def _unpack(self, buffer: bytes) -> Tuple[int, ...]:
+    def _unpack(self, buffer: bytes) -> UnpackResult:
         result = int.from_bytes(buffer, byteorder=self._byteorder, signed=self._signed)
-        return tuple([result])
+        return UnpackResult(len(buffer), result)
 
     def _pack(self, *args: int) -> bytes:
         empty = bytearray()
@@ -75,6 +71,7 @@ UInt16 = IntegerDefinition(2, False)
 UInt32 = IntegerDefinition(4, False)
 UInt64 = IntegerDefinition(8, False)
 UInt128 = IntegerDefinition(16, False)
+
 
 if __name__ == "__main__":
     AltInt8 = IntegerDefinition(1, True)

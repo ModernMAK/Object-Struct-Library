@@ -1,7 +1,6 @@
-from typing import Tuple
-
 from structlib.definitions.common import PrimitiveStructMixin
-from structlib.helper import default_if_none
+from structlib.protocols import UnpackResult
+from structlib.utils import default_if_none
 
 
 class Boolean(PrimitiveStructMixin):
@@ -15,5 +14,5 @@ class Boolean(PrimitiveStructMixin):
     def _pack(self, *args: bool) -> bytes:
         return bytes([self.TRUE if a else self.FALSE for a in args])
 
-    def _unpack(self, buffer: bytes) -> Tuple[bool, ...]:
-        return tuple([False if b == self.FALSE else True for b in buffer])
+    def _unpack(self, buffer: bytes) -> UnpackResult:
+        return UnpackResult(len(buffer), *[False if b == self.FALSE else True for b in buffer])

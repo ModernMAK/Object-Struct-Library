@@ -1,8 +1,8 @@
 from typing import Tuple, Any
 
 from structlib.definitions.common import PrimitiveStructMixin
-from structlib.protocols_dir import align_of, size_of
-from structlib.protocols import PackAndSizeLike
+from structlib.protocols import size_of, align_of
+from structlib.protocols_old import PackAndSizeLike
 
 
 class Array(PrimitiveStructMixin):

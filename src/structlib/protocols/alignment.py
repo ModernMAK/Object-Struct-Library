@@ -1,7 +1,7 @@
 from typing import Protocol, Optional
 
 from structlib.errors import StructError
-from structlib.helper import default_if_none
+from structlib.utils import default_if_none
 
 
 class AlignmentError(StructError):

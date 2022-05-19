@@ -1,6 +1,24 @@
 from typing import Protocol
 
-from structlib.errors import ArgCountError
+from structlib.errors import StructError
+
+
+class FixedBufferSizeError(StructError):
+    def __init__(self, buf_size: int, expected_size: int):
+        self.buf_size = buf_size
+        self.expected_size = expected_size
+
+    def __str__(self):
+        return f"Buffer is '{self.buf_size}' bytes, expected '{self.expected_size}' bytes!"
+
+
+class ArgCountError(StructError):
+    def __init__(self, given: int, expected: int):
+        self.given = given
+        self.expected = expected
+
+    def __str__(self):
+        return f"Received '{self.given}' args, expected '{self.expected}' args!"
 
 
 class ArgLike(Protocol):
