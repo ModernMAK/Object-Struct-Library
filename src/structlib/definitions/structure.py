@@ -4,7 +4,7 @@ import dataclasses
 import sys
 from collections import OrderedDict
 from io import BytesIO
-from typing import Any, BinaryIO, TypeVar, Type, Union, Dict, ClassVar, Tuple, ForwardRef, Optional, _eval_type
+from typing import Any, BinaryIO, TypeVar, Type, Union, Dict, ClassVar, Tuple, ForwardRef, Optional, _eval_type, _type_check
 
 from structlib.definitions.common import PrimitiveStructMixin
 from structlib.protocols import Alignable, ArgLikeMixin, align_of, calculate_padding, WritableBuffer, UnpackResult, ReadableBuffer
@@ -179,7 +179,38 @@ def is_struct(cls: Union[type, object]):
            or issubclass(cls, PrimitiveStructMixin) or issubclass(cls, SubStructLikeMixin)  # TODO replace [PrimitiveStructMixin/SubStructLikeMixin] with better alternative
 
 
-# stolen from pydantic
+# stolen from pydantic; modified to allow fwd-ref to obj
+def eval_fwd_ref(self: ForwardRef, globalns, localns, recursive_guard=frozenset()):
+    if self.__forward_arg__ in recursive_guard:
+        return self
+    if not self.__forward_evaluated__ or localns is not globalns:
+        if globalns is None and localns is None:
+            globalns = localns = {}
+        elif globalns is None:
+            globalns = localns
+        elif localns is None:
+            localns = globalns
+        if self.__forward_module__ is not None:
+            globalns = getattr(
+                sys.modules.get(self.__forward_module__, None), '__dict__', globalns
+            )
+        type_or_obj = eval(self.__forward_code__, globalns, localns)
+        try:
+            type_ = _type_check(
+                type_or_obj,
+                "Forward references must evaluate to types.",
+                is_argument=self.__forward_is_argument__,
+            )
+            self.__forward_value__ = _eval_type(
+                type_, globalns, localns, recursive_guard | {self.__forward_arg__}
+            )
+            self.__forward_evaluated__ = True
+        except TypeError:
+            self.__forward_value__ = type_or_obj  # should be object
+            self.__forward_evaluated__ = True
+    return self.__forward_value__
+
+
 def resolve_annotations(raw_annotations: Dict[str, Type[Any]], module_name: Optional[str]) -> Dict[str, Type[Any]]:
     """
     Partially taken from typing.get_type_hints.
@@ -203,10 +234,12 @@ def resolve_annotations(raw_annotations: Dict[str, Type[Any]], module_name: Opti
             else:
                 value = ForwardRef(value, is_argument=False)
         try:
-            value = _eval_type(value, base_globals, None)
+            value = eval_fwd_ref(value, base_globals, None)
         except NameError:
             # this is ok, it can be fixed with update_forward_refs
             pass
+        # except TypeError:  # forwardref points to an object!
+        #     ...
         annotations[name] = value
     return annotations
 
@@ -308,18 +341,21 @@ if __name__ == "__main__":
 
 
     class MyIdea(AutoStruct):
-        myint: integer.Int8
+        int8: integer.Int8
+        int16: integer.Int16
+        int32: integer.Int32
+        int64: integer.Int64(byteorder="big")
 
-        def __init__(self, myint, *args):
-            self.myint = myint
+        def __init__(self, *args):
+            self.int8, self.int16, self.int32, self.int64 = args
 
         def __str__(self):
-            return f"MyIdea(myint={self.myint})"
+            return f"MyIdea(int8={self.int8}, int16={self.int16}, int8={self.int32}, int8={self.int64})"
 
 
-    inst = MyIdea(0)
+    inst = MyIdea(0x11, 0x22, 0x33, 0x44)
     print(inst)
     data = inst.pack()
-    print(data)
+    print(data.hex(sep=" ", bytes_per_sep=1))
     copy = MyIdea.unpack(data)[1]
     print(copy)
