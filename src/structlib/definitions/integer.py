@@ -1,63 +1,66 @@
-from structlib.byteorder import resolve_byteorder, ByteOrder, ByteOrderLiteral
-from structlib.definitions.common import PrimitiveStructMixin
-from structlib.protocols import Alignable, SizeLikeMixin, ArgLikeMixin, UnpackResult
-from structlib.utils import default_if_none
+from __future__ import annotations
+
+from structlib.byteorder import ByteOrder
+from structlib.definitions.structure import get_type_buffer
+from structlib.packing.protocols import align_of, endian_of, native_size_of
+from structlib.packing.primitive import PrimitiveStructABC
+from structlib.utils import default_if_none, pretty_repr
 
 
-class _Integer(PrimitiveStructMixin):
-    _typing_ = int
+class _Integer(PrimitiveStructABC):
+    def unpack(self, buffer: bytes) -> int:
+        # buffer may be bigger than native size! (If over-aligned)
+        native_size = native_size_of(self)
+        data_buffer = buffer[0:native_size]
+        result = int.from_bytes(data_buffer, byteorder=endian_of(self), signed=self._signed)
+        return result
+
+    def pack(self, arg: int) -> bytes:
+        native_size = native_size_of(self)
+        data = arg.to_bytes(native_size, endian_of(self), signed=self._signed)
+        return get_type_buffer(self, data)
 
     def __init__(self, *, size: int, signed: bool, align_as: int = None, byteorder: ByteOrder = None):
-        PrimitiveStructMixin.__init__(self, align_as=align_as, size=size)
-        self._byteorder = resolve_byteorder(byteorder)
+        super().__init__(size=size, align=default_if_none(align_as, size), _def=self, complete=True, endian=byteorder)
         self._signed = signed
 
-    def __eq__(self, other) -> bool:
-        if not isinstance(other, _Integer):
-            return False
-        else:
-            return self._byteorder == other._byteorder and self._signed == other._signed and \
-                   Alignable.__eq__(self, other) and \
-                   SizeLikeMixin.__eq__(self, other) and \
-                   ArgLikeMixin.__eq__(self, other)
+    def __struct_align_as__(self, alignment: int):
+        return self.__class__(size=native_size_of(self), signed=self._signed, align_as=alignment, byteorder=endian_of(self))
 
-    @property
-    def byte_order(self) -> ByteOrderLiteral:
-        return self._byteorder
+    def __struct_endian_as__(self, endian: ByteOrder):
+        return self.__class__(size=native_size_of(self), signed=self._signed, align_as=align_of(self), byteorder=endian)
 
-    @property
-    def signed(self) -> bool:
-        return self._signed
-
-    def _unpack(self, buffer: bytes) -> UnpackResult:
-        result = int.from_bytes(buffer, byteorder=self._byteorder, signed=self._signed)
-        return UnpackResult(len(buffer), result)
-
-    def _pack(self, *args: int) -> bytes:
-        empty = bytearray()
-        return empty.join([_.to_bytes(self._size_, self._byteorder, signed=self._signed) for _ in args])
-
-
-class IntegerDefinition(_Integer):  # Inheriting Integer allows it to be used without specifying an instance; syntax sugar for std type
-    class Integer(_Integer):
-        ...
-
-    def __init__(self, size: int, signed: bool, *, align_as: int = None, byteorder: ByteOrder = None):
-        if size < 1:
-            raise NotImplementedError  # Todo raise an error
-        super().__init__(size=size, signed=signed, align_as=align_as, byteorder=byteorder)
-
-    def __call__(self, *, align_as: int = None, byteorder: ByteOrder = None) -> Integer:
-        return self.Integer(align_as=default_if_none(align_as, self._align_), byteorder=default_if_none(byteorder, self.byte_order), size=self._size_, signed=self._signed)
+    def __eq__(self, other):
+        if isinstance(other, _Integer):
+            return super().__eq__(other) and \
+                   self._signed == other._signed  # and \
+            # self._byteorder == other._byteorder
 
     def __str__(self):
         # This should generate a 'Unique' string per equality, but not used for equality comparisons
         #   Repr will still use the class <object at id> syntax to clearly state they are different objects.
         signed = 'Int' if self._signed else 'Uint'
-        size = self._size_ * 8
-        endian = f'{self._byteorder[0]}e'  # HACK, _byteorder should be one of the literals 'l'ittle or 'b'ig
-        align = f'-@{self._align_}' if self._align_ != self._size_ else ''
+        native_size = native_size_of(self)
+        size = native_size * 8
+        endian = f'{endian_of(self)[0]}e'  # HACK, _byteorder should be one of the literals 'l'ittle or 'b'ig
+        alignment = align_of(self)
+        align = f'-@{alignment}' if alignment != size else ''
         return f"{signed}{size}-{endian}{align}"
+
+    def __repr__(self):
+        repr = super().__repr__()
+        msg = str(self)
+        return pretty_repr(repr,msg)
+
+
+class IntegerDefinition(_Integer):  # Inheriting Integer allows it to be used without specifying an instance; syntax sugar for std type
+    def __init__(self, size: int, signed: bool, *, align_as: int = None, byteorder: ByteOrder = None):
+        if size < 1:
+            raise NotImplementedError  # Todo raise an error
+        super().__init__(size=size, signed=signed, align_as=align_as, byteorder=byteorder)
+
+    def __call__(self, *, align_as: int = None, byteorder: ByteOrder = None) -> IntegerDefinition:
+        return self.__class__(align_as=default_if_none(align_as, align_of(self)), byteorder=default_if_none(byteorder, endian_of(self)), size=native_size_of(self), signed=self._signed)
 
 
 Int8 = IntegerDefinition(1, True)
@@ -71,7 +74,6 @@ UInt16 = IntegerDefinition(2, False)
 UInt32 = IntegerDefinition(4, False)
 UInt64 = IntegerDefinition(8, False)
 UInt128 = IntegerDefinition(16, False)
-
 
 if __name__ == "__main__":
     AltInt8 = IntegerDefinition(1, True)

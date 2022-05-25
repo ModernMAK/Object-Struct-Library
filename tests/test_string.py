@@ -1,8 +1,9 @@
 from typing import List
 
-from shared import assert_pack_like, assert_buffer_pack_like, assert_stream_pack_like
+from primitive_assertion_util import assert_pack_like, assert_buffer_pack_like, assert_stream_pack_like
 from structlib.definitions.strings import StringBuffer, CStringBuffer
-from structlib.protocols import calculate_padding, align_of, size_of
+from structlib.packing.protocols import align_of, size_of
+from structlib.buffer_tools import calculate_padding
 
 DEFAULT_OFFSETS = [0, 1, 2, 4, 8]  # Normal power sequence
 DEFAULT_ALIGNS = [1, 2, 4, 8]  # 0 not acceptable alignment

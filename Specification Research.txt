@@ -1,6 +1,0 @@
-Moreso for me to organize thoughts
-Like the builtin struct-lib
-this should be based on and compatable with c++
-
-Alignment should follow:
-https://en.cppreference.com/w/cpp/language/object#Alignment

@@ -1,63 +1,87 @@
 from __future__ import annotations
 
-import dataclasses
 import sys
+from abc import ABCMeta
 from collections import OrderedDict
 from io import BytesIO
-from typing import Any, BinaryIO, TypeVar, Type, Union, Dict, ClassVar, Tuple, ForwardRef, Optional, _eval_type, _type_check
+from typing import Any, Union, TypeVar, Tuple, Optional, BinaryIO, Dict, TYPE_CHECKING, ClassVar, Type, ForwardRef, _type_check, _eval_type
 
-from structlib.definitions.common import PrimitiveStructMixin
-from structlib.protocols import Alignable, ArgLikeMixin, align_of, calculate_padding, WritableBuffer, UnpackResult, ReadableBuffer
-from structlib.protocols.size import VarSizeLikeMixin, size_of, VarSizeError
-from structlib.protocols_old import SubStructLike, SubStructLikeMixin, write_data_to_buffer, write_data_to_stream
-from structlib.utils import default_if_none
+from structlib.buffer_tools import write_data_to_buffer, write_data_to_stream, calculate_padding
+from structlib.byteorder import ByteOrder, resolve_byteorder
+from structlib.packing.protocols import struct_definition, struct_complete, align_of, endian_of, native_size_of, StructDefABC, size_of
+from structlib.packing.structure import StructStructABC
+from structlib.typing_ import WritableBuffer
+
+T = TypeVar("T")
 
 
-class Struct(SubStructLikeMixin, VarSizeLikeMixin):
-    def __init__(self, *sub_structs: SubStructLike, align_as: int = None):
-        if not align_as:
-            align_as = max((align_of(sub) for sub in sub_structs))
-        Alignable.__init__(self, align_as=align_as)
-        ArgLikeMixin.__init__(self, args=len(sub_structs))
-        size = 0
-        try:
-            for sub in sub_structs:
-                alignment = align_of(sub)
-                size += calculate_padding(alignment, size)  # Align type
-                size += size_of(sub)
-                size += calculate_padding(alignment, size)  # Pad type
-            # Padding of THIS struct
-            size += calculate_padding(align_of(self), size)
-        except (VarSizeError, AttributeError):
-            size = None
-        VarSizeLikeMixin.__init__(self, size=size)
+def struct2args(t: Union[DataTypeStructDefABC, DataclassStruct, Any]) -> Tuple[Any, ...]:
+    if hasattr(t, "__struct_struct2args__"):
+        return t.__struct_struct2args__()
+    else:
+        return t
 
-        # TODO perform cyclic structure check
-        #   Unpack/Pack will eventually fail (unless an infinite-buffer/cyclic generator is used; in which case: stack-overflow)
-        #   __eq__ will stack-overflow
-        self.sub_structs = sub_structs
 
-    def __str__(self):
-        return f"Struct ({', '.join([str(_) for _ in self.sub_structs])})"
+def args2struct(t: Union[Type[DataTypeStructDefABC], Type[DataclassStruct]], *args) -> T:
+    if hasattr(t, "__struct_args2struct__"):
+        return t.__struct_args2struct__(*args)
+    else:
+        return args
 
-    def __eq__(self, other):
-        if self is other:
-            return True
-        elif not isinstance(other, Struct):
-            return False
+
+def get_type_buffer(t: StructDefABC, data: Optional[bytes] = None) -> WritableBuffer:
+    """
+    Gets a buffer for the type specified; data is copied to the first len(data) bytes if specified.
+
+    :param t: Class/Instance of struct to build a buffer for
+    :param data: The data to fill the buffer with (if present).
+    :return bytearray: An aligned buffer which can be written to.
+    """
+    size = size_of(t)
+    buffer = bytearray(size)
+    if data is not None:
+        buffer[0:len(data)] = data
+    return buffer
+
+
+def _max_align_of(*types: Union[StructDefABC, StructDefABC]):
+    alignments = []
+    for _type in types:
+        alignment = align_of(_type)
+        if alignment is None:  # type is not complete!
+            return None
         else:
-            if not Alignable.__eq__(self, other) or not ArgLikeMixin.__eq__(self, other):
-                return False
-            for s, o in zip(self.sub_structs, other.sub_structs):
-                if s != o:
-                    return False
-            return True
+            alignments.append(alignment)
+    return max(alignments) if len(alignments) > 0 else None
 
-    def __call__(self, *, align_as: int) -> Struct:
-        return Struct(*self.sub_structs, align_as=align_as)
+
+def _combined_size(*types: Union[StructDefABC, StructDefABC]):
+    size = 0
+    for t in types:
+        t_size = size_of(t) + calculate_padding(align_of(t), size)
+        if t_size is None:
+            return None  # type is not complete!
+        else:
+            size += t_size
+    return size
+
+
+class Struct(StructStructABC):
+    def __init__(self, *types: Union[StructDefABC, StructDefABC], alignment: int = None, endian: ByteOrder):
+        if alignment is None:
+            alignment = _max_align_of(*types)
+        size = _combined_size(*types)
+        super(Struct, self).__init__(size, alignment, self, endian=endian)  # complete will autogen
+        self._types = types
+
+    def __struct_align_as__(self: T, alignment: int) -> T:
+        return self.__class__(self._types, align_as=alignment, endian=endian_of(self))
+
+    def __struct_endian_as__(self: T, endian: ByteOrder) -> T:
+        return self.__class__(self._types, align_as=align_of(self), endian=endian)
 
     def pack(self, *args: Any) -> bytes:
-        if self.is_fixed_size:
+        if struct_complete(self):
             return self._fixed_pack(*args)
         else:
             return self._var_pack(*args)
@@ -65,121 +89,97 @@ class Struct(SubStructLikeMixin, VarSizeLikeMixin):
     def _fixed_pack(self, *args: Any) -> bytes:
         buffer = bytearray(size_of(self))
         written = 0
-        for sub_struct, sub_args in zip(self.sub_structs, args):
-            if not isinstance(sub_args, tuple):
-                sub_args = (sub_args,)
-            written += sub_struct.pack_buffer(buffer, *sub_args, offset=written)
-        # Padding should be included in size
-        # padding = calculate_padding(align_as=align_of(self),offset=written)
-        # T/ODO alignmnet padding
+        for t, a in zip(self._types, args):
+            if not isinstance(a, tuple):
+                a = (a,)
+            _def = struct_definition(t)
+            written += _def.pack_buffer(buffer, *a, offset=written, origin=0)
         return buffer
 
     def _var_pack(self, *args: Any) -> bytes:
+        alignment = align_of(self)
         with BytesIO() as stream:
-            for sub_struct, sub_args in zip(self.sub_structs, args):
-                if not isinstance(sub_args, tuple):
-                    sub_args = (sub_args,)
-                sub_struct.pack_stream(stream, *sub_args, origin=0)  # None will use NOW as the origin
-                padding = calculate_padding(align_as=align_of(self), offset=stream.seek())
-                stream.write([0x00] * padding)
+            for t, a in zip(self._types, args):
+                if not isinstance(a, tuple):
+                    a = (a,)
+                _def = struct_definition(t)
+                _def.pack_stream(stream, *a, origin=0)
+            # Pad type to alignment
+            padding = calculate_padding(alignment, stream.tell())
+            stream.write([0x00] * padding)
             stream.seek(0)
             return stream.read()
 
-    def unpack(self, buffer: bytes) -> UnpackResult:
-        return self.unpack_buffer(buffer)
+    def unpack(self, buffer: bytes) -> Tuple[Any, ...]:
+        return self.unpack_buffer(buffer)[1]
 
     def pack_buffer(self, buffer: WritableBuffer, *args: Any, offset: int = 0, origin: int = 0) -> int:
-        # TODO fix origin logic
+        alignment = align_of(self)
         data = self.pack(*args)
-        return write_data_to_buffer(buffer, data, align_as=align_of(self), offset=offset, origin=origin)
+        return write_data_to_buffer(buffer, data, align_as=alignment, offset=offset, origin=origin)
 
-    def unpack_buffer(self, buffer: bytes, *, offset: int = 0, origin: int = 0) -> UnpackResult:
-        # TODO fix origin logic
-        padding = calculate_padding(align_of(self), offset)
+    def unpack_buffer(self, buffer: bytes, offset: int = 0, origin: int = 0) -> Tuple[int, Tuple[Any, ...]]:
         items = []
         read = 0
-        for sub_struct in self.sub_structs:
-            part = sub_struct.unpack_buffer(buffer, offset=offset + padding + read, origin=origin)
-            read += part.bytes_read
-            # Handle cases where pr
-            items.extend(part.values)
-        return UnpackResult(read, *items)
-
-    def pack_stream(self, stream: BinaryIO, *args, origin: int = None) -> int:
-        # TODO fix origin logic
-        data = self.pack(*args)
-        return write_data_to_stream(stream, data, align_as=align_of(self), origin=origin)
-
-    def unpack_stream(self, stream: BinaryIO, origin: int = None) -> UnpackResult:
-        # TODO fix origin logic
-        items = []
-        read = 0
-        origin = default_if_none(origin, stream.tell())
-        padding = calculate_padding(align_of(self), stream.tell() - origin)
-        stream.seek(origin + padding)
-        for sub_struct in self.sub_structs:
-            read_part, read_item = sub_struct.unpack_stream(stream, origin)
+        alignment = align_of(self)
+        padding = calculate_padding(alignment, offset)
+        for t in self._types:
+            _def = struct_definition(t)
+            read_part, read_item = _def.unpack_buffer(buffer, offset=offset + read + padding, origin=origin)
             read += read_part
             items.append(read_item)
-        return UnpackResult(read, *items)
+        return read, tuple(items)
+
+    def pack_stream(self, stream: BinaryIO, *args: Any, origin: int = 0) -> int:
+        alignment = align_of(self)
+        data = self.pack(*args)
+        return write_data_to_stream(stream, data, align_as=alignment, origin=origin)
+
+    def unpack_stream(self, stream: BinaryIO, origin: int = 0) -> Tuple[int, Tuple[Any, ...]]:
+        items = []
+        read = 0
+        alignment = align_of(self)
+        padding = calculate_padding(alignment, stream.tell() - origin)
+        stream.seek(origin + padding)
+        for t in self._types:
+            _def = struct_definition(t)
+            read_part, read_item = _def.unpack_stream(stream, origin)
+            read += read_part
+            items.append(read_item)
+        return read, tuple(items)
 
 
-T = TypeVar('T')
+# @runtime_checkable (TypeError: @runtime_checkable can be only applied to protocol classes, got <class 'structlib.protocols.proto.DataTypeStructDef'>)
+class DataclassStruct(StructDefABC):
+    def __struct_struct2args__(self) -> Tuple[Any, ...]:
+        ...
+
+    @classmethod
+    def __struct_args2struct__(cls, *args: Any) -> T:
+        ...
+
+    def pack(self) -> bytes:
+        ...
+
+    @classmethod
+    def unpack(cls, buffer: bytes) -> T:
+        ...
+
+    def pack_buffer(self, buffer: bytes, *, offset: int = 0, origin: int = 0) -> int:
+        ...
+
+    @classmethod
+    def unpack_buffer(cls, buffer: bytes, *, offset: int = 0, origin: int = 0) -> Tuple[int, T]:
+        ...
+
+    def pack_stream(self, buffer: bytes, *, offset: int = 0, origin: int = 0) -> int:
+        ...
+
+    @classmethod
+    def unpack_stream(cls, buffer: bytes, *, offset: int = 0, origin: int = 0) -> Tuple[int, T]:
+        ...
 
 
-class StructDataclass(Struct):
-    """Experimental"""
-
-    def __init__(self, *sub_structs: SubStructLike, align_as: int = None, dclass: Type[T]):
-        super().__init__(*sub_structs, align_as=align_as)
-        self._dclass = dclass
-
-    def _handle_args(self, *args: Union[T, Any]):
-        if len(args) == 1 and isinstance(args[0], self._dclass):
-            return dataclasses.astuple(args[0])
-        else:
-            return args
-
-    def pack(self, *args: Union[T, Any]):
-        args = self._handle_args(*args)
-        return super(StructDataclass, self).pack(*args)
-
-    def unpack(self, buffer: ReadableBuffer) -> UnpackResult:
-        return self.unpack_buffer(buffer)
-
-    def pack_buffer(self, buffer: WritableBuffer, *args: Union[T, Any], offset: int = 0) -> int:
-        args = self._handle_args(*args)
-        return super(StructDataclass, self).pack_buffer(buffer, *args, offset=offset)
-
-    def unpack_buffer(self, buffer: ReadableBuffer, *, offset: int = 0, origin: int = 0) -> UnpackResult:
-        result = super(StructDataclass, self).unpack_buffer(buffer, offset=offset, origin=origin)
-        return UnpackResult(result.bytes_read, self._dclass(*result))
-
-    def pack_stream(self, stream: BinaryIO, *args: Union[T, Any], origin: int = None) -> int:
-        args = self._handle_args(*args)
-        return super(StructDataclass, self).pack_stream(stream, *args, origin=origin)
-
-    def unpack_stream(self, stream: BinaryIO, origin: int = None) -> UnpackResult:
-        result = super(StructDataclass, self).unpack_stream(stream, origin=origin)
-        return UnpackResult(result.bytes_read, self._dclass(*result))
-
-
-from typing import TYPE_CHECKING
-
-STRUCT_LAYOUT = "__struct_layout__"
-STRUCT_ATTR = "__struct_attr__"
-STRUCT_ORDER = "__struct_order__"
-STRUCT_2_TUPLE = ""
-
-
-def is_struct(cls: Union[type, object]):
-    if not isinstance(cls, type):  # struct instance
-        cls = cls.__class__
-    return hasattr(cls, STRUCT_LAYOUT) or issubclass(cls, Struct) \
-           or issubclass(cls, PrimitiveStructMixin) or issubclass(cls, SubStructLikeMixin)  # TODO replace [PrimitiveStructMixin/SubStructLikeMixin] with better alternative
-
-
-# stolen from pydantic; modified to allow fwd-ref to obj
 def eval_fwd_ref(self: ForwardRef, globalns, localns, recursive_guard=frozenset()):
     if self.__forward_arg__ in recursive_guard:
         return self
@@ -214,7 +214,7 @@ def eval_fwd_ref(self: ForwardRef, globalns, localns, recursive_guard=frozenset(
 def resolve_annotations(raw_annotations: Dict[str, Type[Any]], module_name: Optional[str]) -> Dict[str, Type[Any]]:
     """
     Partially taken from typing.get_type_hints.
-    Resolve string or ForwardRef annotations into type objects if possible.
+    Resolve string or ForwardRef annotations into types OR objects if possible.
     """
     base_globals: Optional[Dict[str, Any]] = None
     if module_name:
@@ -233,129 +233,134 @@ def resolve_annotations(raw_annotations: Dict[str, Type[Any]], module_name: Opti
                 value = ForwardRef(value, is_argument=False, is_class=True)
             else:
                 value = ForwardRef(value, is_argument=False)
-        try:
-            value = eval_fwd_ref(value, base_globals, None)
-        except NameError:
-            # this is ok, it can be fixed with update_forward_refs
-            pass
+            try:
+                value = eval_fwd_ref(value, base_globals, None)
+            except NameError:
+                # this is ok, it can be fixed with update_forward_refs
+                pass
         # except TypeError:  # forwardref points to an object!
         #     ...
         annotations[name] = value
     return annotations
 
 
-class AutoStructMetaclass(type):
+class DataTypeStructDefMetaclass(ABCMeta, type):
     if sys.version_info < (3, 5):  # 3.5 >= is ordered by design
         @classmethod
         def __prepare__(cls, name, bases):
             return OrderedDict()
 
-    def __new__(mcs, name: str, bases: tuple[type, ...], attrs: Dict[str, Any], align_as: int = None):
+    def __new__(mcs, name: str, bases: tuple[type, ...], attrs: Dict[str, Any], alignment: int = None, endian:ByteOrder=None):
         if not bases:
-            attrs[STRUCT_LAYOUT] = None
-            attrs[STRUCT_ATTR] = None
             return super().__new__(mcs, name, bases, attrs)  # Abstract Base Class; AutoStruct
 
-        if STRUCT_LAYOUT not in attrs:
-            annotations = resolve_annotations(attrs.get("__annotations__", {}), attrs.get("__module__"))
-            typed_attr = {name: typing for name, typing in annotations.items() if is_struct(typing)}
-            ordered_attr = [name for name in annotations.keys() if name in typed_attr]
-            ordered_structs = [annotations[attr] for attr in typed_attr]
-            attrs[STRUCT_LAYOUT] = Struct(*ordered_structs, align_as=align_as)
-            attrs[STRUCT_ATTR] = typed_attr
-            attrs[STRUCT_ORDER] = tuple(ordered_attr)
+        if "__struct_def__" not in attrs:
+            type_hints = resolve_annotations(attrs.get("__annotations__", {}), attrs.get("__module__"))
+            typed_attr = {name: typing for name, typing in type_hints.items() if hasattr(typing, "__struct_def__")}
+            ordered_attr = [name for name in type_hints.keys() if name in typed_attr]
+            ordered_structs = [type_hints[attr] for attr in typed_attr]
+            attrs["__struct_def__"] = struct = Struct(*ordered_structs, alignment=alignment,endian=resolve_byteorder(endian))
+            attrs["__struct_types__"] = typed_attr
+            attrs["__struct_type_order__"] = tuple(ordered_attr)
+            attrs["__struct_native_size__"] = native_size_of(struct)
+            attrs["__struct_alignment__"] = align_of(struct)
+            attrs["__struct_complete__"] = struct_complete(struct)
         return super().__new__(mcs, name, bases, attrs)
 
 
-def struct2tuple(self: Union[AutoStruct, Any]) -> Tuple[Any, ...]:
-    if hasattr(self, STRUCT_ATTR):
-        attr = self.__struct_attr__.keys()
-        return tuple([struct2tuple(getattr(self, a)) for a in attr])
-    else:
-        return self
+class DataTypeStructDefABC(StructDefABC, metaclass=DataTypeStructDefMetaclass):
+    def __init__(self):
+        pass  # Intentionally avoid calling super for TypeStructABC
 
-
-def tuple2struct(cls: Type[AutoStruct], *args: Any) -> Union[AutoStruct, Any]:
-    if hasattr(cls, STRUCT_ATTR) and hasattr(cls, STRUCT_ORDER):
-        attr = cls.__struct_attr__
-        order = cls.__struct_order__
-        inst = cls.__new__(cls)
-        for name, arg in zip(order, args):
-            typing = attr[name]
-            try:
-                as_tuple = tuple2struct(typing, *arg)
-            except TypeError:
-                as_tuple = tuple2struct(typing, arg)[0]
-            setattr(inst, name, as_tuple)
-        return inst
-    else:
-        return args
-
-
-class AutoStruct(metaclass=AutoStructMetaclass):
     if TYPE_CHECKING:
-        __struct_layout__: ClassVar[Struct] = Struct()
-        __struct_attr__: ClassVar[Dict[str, type]] = {}
-        __struct_order__: ClassVar[Tuple[str, ...]]
+        __struct_def__: ClassVar[StructDefABC] = Struct()
+        __struct_types__: ClassVar[Dict[str, StructDefABC]] = {}
+        __struct_type_order__: ClassVar[Tuple[str, ...]]
 
-    def __struct2tuple__(self) -> Tuple[Any, ...]:
-        return struct2tuple(self)  # I did this backwards; I know
+    def __struct_struct2args__(self) -> Tuple[Any, ...]:
+        names = self.__struct_type_order__
+        attrs = [struct2args(getattr(self, n)) for n in names]
+        return tuple(attrs)
 
     @classmethod
-    def __tuple2struct__(cls, *args: Any) -> AutoStruct:
-        return tuple2struct(cls, *args)  # I did this backwards; I know
+    def __struct_args2struct__(cls, *args: Any) -> T:
+        names = cls.__struct_type_order__
+        types = cls.__struct_types__
+        kwargs = {}
+        for name, arg in zip(names, args):
+            t = types[name]
+            if not isinstance(arg, tuple):
+                kwargs[name] = args2struct(t, arg)[0]  # Preserve non-tuple
+            else:
+                kwargs[name] = args2struct(t, *arg)  # Preserve tuple
+        # TODO figure out a proper solution
+        inst = cls.__new__(cls)
+        for name, value in kwargs.items():
+            setattr(inst, name, value)
+        return inst
 
     def pack(self) -> bytes:
-        args = self.__struct2tuple__()
-        return self.__struct_layout__.pack(*args)
+        args = struct2args(self)
+        _def = struct_definition(self)
+        return _def.pack(*args)
 
     @classmethod
-    def unpack(cls, buffer: bytes) -> Tuple[int, AutoStruct]:
-        _ = cls.__struct_layout__.unpack(buffer)
-        inst = cls.__tuple2struct__(*_.values)
-        return _.bytes_read, inst
+    def unpack(cls: T, buffer: bytes) -> T:
+        _def = struct_definition(cls)
+        args = _def.unpack(buffer)
+        inst = args2struct(cls, *args)
+        return inst
 
     def pack_buffer(self, buffer: WritableBuffer, *, offset: int = 0, origin: int = 0) -> int:
-        args = self.__struct2tuple__()
-        return self.__struct_layout__.pack_buffer(buffer, *args, offset=offset, origin=origin)
+        args = struct2args(self)
+        _def = struct_definition(self)
+        return _def.pack_buffer(buffer, *args, offset=offset, origin=origin)
 
     @classmethod
-    def unpack_buffer(cls, buffer: bytes, *, offset: int = 0, origin: int = 0) -> Tuple[int, AutoStruct]:
-        _ = cls.__struct_layout__.unpack_buffer(buffer, offset=offset, origin=origin)
-        inst = cls.__tuple2struct__(*_.values)
-        return _.bytes_read, inst
+    def unpack_buffer(cls, buffer: bytes, *, offset: int = 0, origin: int = 0) -> Tuple[int, T]:
+        _def = struct_definition(cls)
+        read, args = _def.unpack_buffer(buffer, offset=offset, origin=origin)
+        inst = args2struct(cls, *args)
+        return read, inst
 
     def pack_stream(self, stream: BinaryIO, *, origin: int = None) -> int:
-        args = self.__struct2tuple__()
-        return self.__struct_layout__.pack_stream(stream, *args, origin)
+        args = struct2args(self)
+        _def = struct_definition(self)
+        return _def.pack_stream(stream, *args, origin)
 
     @classmethod
-    def unpack_stream(cls, stream: BinaryIO, *, origin: int = None) -> Tuple[int, AutoStruct]:
-        _ = cls.__struct_layout__.unpack_stream(stream, origin=origin)
-        inst = cls.__tuple2struct__(*_.values)
-        return _.bytes_read, inst
+    def unpack_stream(cls, stream: BinaryIO, *, origin: int = None) -> Tuple[int, T]:
+        _def = struct_definition(cls)
+        read, args = _def.unpack_stream(stream, origin=origin)
+        inst = args2struct(cls, *args)
+        return read, inst
+
+
+#
+#
 
 
 if __name__ == "__main__":
     import integer
 
 
-    class MyIdea(AutoStruct):
+    class MyIdea(DataTypeStructDefABC):
         int8: integer.Int8
         int16: integer.Int16
         int32: integer.Int32
         int64: integer.Int64(byteorder="big")
 
         def __init__(self, *args):
+            super().__init__()
             self.int8, self.int16, self.int32, self.int64 = args
 
         def __str__(self):
-            return f"MyIdea(int8={self.int8}, int16={self.int16}, int8={self.int32}, int8={self.int64})"
+            return f"MyIdea(int8={self.int8}, int16={self.int16}, int32={self.int32}, int64={self.int64})"
 
 
     inst = MyIdea(0x11, 0x22, 0x33, 0x44)
     print(inst)
     data = inst.pack()
     print(data.hex(sep=" ", bytes_per_sep=1))
-    copy = MyIdea.unpack(data)[1]
+    copy = MyIdea.unpack(data)
     print(copy)

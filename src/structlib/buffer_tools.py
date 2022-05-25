@@ -1,25 +1,9 @@
-from abc import ABC
+from __future__ import annotations
+
 from typing import Tuple, BinaryIO
 
-from structlib.protocols import SizeLike, AlignLike, ArgLike, Alignable, ArgLikeMixin
-from structlib.protocols.pack import PackLike, BufferPackLike, StreamPackLike, BufferPackLikeMixin, StreamPackLikeMixin, PackLikeMixin, WritableBuffer, ReadableBuffer
-from structlib.protocols.padding import calculate_padding
+from structlib.typing_ import WritableBuffer, ReadableBuffer
 from structlib.utils import default_if_none
-
-
-class PackAndSizeLike(PackLike, SizeLike):
-    ...
-
-
-class SubStructLike(AlignLike, BufferPackLike, StreamPackLike, PackLike, ArgLike):
-    ...
-
-
-class SubStructLikeMixin(Alignable, BufferPackLikeMixin, StreamPackLikeMixin, PackLikeMixin, ArgLikeMixin, ABC):
-    # def __init__(self, *pos_args, align_as: int = None, default_align:int = None, args:int = 1, **kwargs):
-    #     super(AlignLikeMixin).__init__(align_as=align_as,default_align=default_align)
-    #     super(ArgLikeMixin).__init__(args=args)
-    ...
 
 
 def create_padding_buffer(padding: int) -> bytes:
@@ -70,3 +54,11 @@ def read_data_from_stream(stream: BinaryIO, data_size: int, align_as: int, origi
     _padding_buf = stream.read(padding)
     data = stream.read(data_size)
     return padding + data_size, data
+
+
+def calculate_padding(alignment: int, size_or_offset: int) -> int:
+    bytes_from_align = size_or_offset % alignment
+    if bytes_from_align != 0:
+        return alignment - bytes_from_align
+    else:
+        return 0
