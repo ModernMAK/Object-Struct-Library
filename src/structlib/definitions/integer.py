@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from structlib.byteorder import ByteOrder
 from structlib.definitions.structure import get_type_buffer
-from structlib.packing.protocols import align_of, endian_of, native_size_of
 from structlib.packing.primitive import PrimitiveStructABC
-from structlib.utils import default_if_none, pretty_repr
+from structlib.packing.protocols import align_of, endian_of, native_size_of
+from structlib.utils import default_if_none, pretty_str, auto_pretty_repr
 
 
 class _Integer(PrimitiveStructABC):
@@ -37,20 +37,15 @@ class _Integer(PrimitiveStructABC):
             # self._byteorder == other._byteorder
 
     def __str__(self):
-        # This should generate a 'Unique' string per equality, but not used for equality comparisons
-        #   Repr will still use the class <object at id> syntax to clearly state they are different objects.
-        signed = 'Int' if self._signed else 'Uint'
+        name = 'Int' if self._signed else 'Uint'
         native_size = native_size_of(self)
         size = native_size * 8
-        endian = f'{endian_of(self)[0]}e'  # HACK, _byteorder should be one of the literals 'l'ittle or 'b'ig
+        endian = endian_of(self)
         alignment = align_of(self)
-        align = f'-@{alignment}' if alignment != size else ''
-        return f"{signed}{size}-{endian}{align}"
+        return pretty_str(f"{name}{size}",endian,alignment)
 
     def __repr__(self):
-        repr = super().__repr__()
-        msg = str(self)
-        return pretty_repr(repr,msg)
+        return auto_pretty_repr(self)
 
 
 class IntegerDefinition(_Integer):  # Inheriting Integer allows it to be used without specifying an instance; syntax sugar for std type

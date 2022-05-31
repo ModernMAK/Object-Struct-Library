@@ -5,11 +5,17 @@ from structlib.definitions.structure import Struct, DataTypeStructDefABC
 class NestedType(DataTypeStructDefABC):
     def __init__(self, *args):
         # super.__init__() # ???? Why does it need arguments?
+        super().__init__()
         self.a, self.b, self.c = args
 
     a: integer.Int8
     b: integer.Int16
     c: integer.UInt8
+
+    def __eq__(self, other):
+        return self.a == other.a and \
+               self.b == other.b and \
+               self.c == other.c
 
 
 class ContainerType(DataTypeStructDefABC):
@@ -21,6 +27,12 @@ class ContainerType(DataTypeStructDefABC):
     b: integer.Int16
     c: integer.UInt8
     d: NestedType
+
+    def __eq__(self, other):
+        return self.a == other.a and \
+               self.b == other.b and \
+               self.c == other.c and \
+               self.d == other.d
 
 
 def test_nested():

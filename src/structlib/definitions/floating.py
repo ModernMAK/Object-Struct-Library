@@ -4,10 +4,13 @@ import struct
 from structlib.byteorder import ByteOrder
 from structlib.packing.protocols import align_of, endian_of, native_size_of
 from structlib.packing.primitive import PrimitiveStructABC
-from structlib.utils import default_if_none
+from structlib.utils import default_if_none, pretty_str, auto_pretty_repr
 
 
 class _Float(PrimitiveStructABC):
+    """
+    Structs organized by (bit_size, endian [literal])
+    """
     INTERNAL_STRUCTS = {
         (16, "little"): struct.Struct("<e"),
         (16, "big"): struct.Struct(">e"),
@@ -27,7 +30,7 @@ class _Float(PrimitiveStructABC):
 
     def __init__(self, bits: int, *, align_as: int = None, byteorder: str = None):
         alignment = default_if_none(align_as, bits // 8)
-        super().__init__(bits // 8, alignment, self,endian=byteorder)
+        super().__init__(bits // 8, alignment, self, endian=byteorder)
         self._internal = self.INTERNAL_STRUCTS[(bits, endian_of(self))]
 
     def __call__(self, *, align_as: int = None, byteorder: str = None):
@@ -38,10 +41,12 @@ class _Float(PrimitiveStructABC):
 
     def __str__(self):
         size = native_size_of(self) * 8
-        byteorder = f"{endian_of(self)[0]}e"
+        endian = endian_of(self)
         alignment = align_of(self)
-        align = f" @{alignment}" if alignment != size else ''
-        return f"Float{size}-{byteorder}{align}"
+        return pretty_str(f"Float{size}", endian, alignment)
+
+    def __repr__(self):
+        return auto_pretty_repr(self)
 
     def unpack(self, buffer: bytes) -> float:
         native_size = native_size_of(self)

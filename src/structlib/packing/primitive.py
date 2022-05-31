@@ -3,7 +3,7 @@ from typing import TypeVar, Protocol, Tuple, BinaryIO
 
 from structlib.buffer_tools import write_data_to_buffer, read_data_from_buffer, write_data_to_stream, read_data_from_stream
 from structlib.byteorder import ByteOrderLiteral, ByteOrder
-from structlib.packing.protocols import struct_complete, align_of, align_as, endian_of, native_size_of, StructDef, StructDefABC, endian_as, size_of
+from structlib.packing.protocols import struct_complete, align_of, align_as, endian_of, native_size_of, StructDef, BaseStructDefABC, endian_as, size_of, StructDefABC
 from structlib.typing_ import WritableBuffer, ReadableBuffer
 
 T = TypeVar("T")
@@ -93,7 +93,7 @@ class PrimitiveStructDef(PrimitivePackable,PrimitiveIterPackable,StructDef,Proto
     ...
 
 
-class PrimitiveStructABC(PrimitivePackableABC, PrimitiveIterPackableABC, StructDefABC, ABC):
+class PrimitiveStructABC(PrimitivePackableABC, PrimitiveIterPackableABC, BaseStructDefABC, ABC):
     def pack(self, arg: T) -> bytes:
         raise NotImplementedError
 
@@ -166,7 +166,7 @@ class PrimitiveStructABC(PrimitivePackableABC, PrimitiveIterPackableABC, StructD
         return read, tuple(items)
 
 
-class WrappedPrimitiveStructABC(PrimitivePackableABC, PrimitiveIterPackableABC, ABC):
+class WrappedPrimitiveStructABC(StructDefABC, PrimitivePackableABC, PrimitiveIterPackableABC, ABC):
     def __init__(self, backing, _def=None):
         self.__struct_def__ = _def or self
         self._backing = backing

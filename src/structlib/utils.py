@@ -1,5 +1,6 @@
-from typing import Any
+from typing import Any, Optional
 
+from structlib.byteorder import ByteOrderLiteral
 from structlib.typing_ import ReadableBuffer
 
 
@@ -29,6 +30,18 @@ def pretty_repr(repr, msg) -> str:
     """
     pre, post = repr.split(" ", maxsplit=1)  # split before object
     return pre + f" ({msg}) " + post
+
+
+def auto_pretty_repr(self) -> str:
+    repr = super(self.__class__, self).__repr__()
+    msg = str(self)
+    return pretty_repr(repr, msg)
+
+
+def pretty_str(name: str, endian: ByteOrderLiteral, alignment: Optional[int]):
+    str_endian = f'{endian[0]}e'  # HACK, _byteorder should be one of the literals 'l'ittle or 'b'ig
+    str_align = f'-@{alignment}' if alignment is None else ''
+    return f"{name}-{str_endian}{str_align}"
 
 
 def default_if_none(value: Any, default: Any) -> Any:

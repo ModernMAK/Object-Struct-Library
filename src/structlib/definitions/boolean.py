@@ -2,7 +2,7 @@ from structlib.byteorder import ByteOrder
 from structlib.definitions.structure import T
 from structlib.packing.protocols import align_of, endian_of, size_of
 from structlib.packing.primitive import PrimitiveStructABC
-from structlib.utils import default_if_none
+from structlib.utils import default_if_none, auto_pretty_repr, pretty_str
 
 
 class BooleanDefinition(PrimitiveStructABC):
@@ -36,6 +36,14 @@ class BooleanDefinition(PrimitiveStructABC):
 
     def unpack(self, buffer: bytes) -> bool:
         return False if buffer[0] == self.FALSE else True
+
+    def __str__(self):
+        endian = endian_of(self)
+        alignment = align_of(self)
+        return pretty_str(f"Boolean", endian, alignment)
+
+    def __repr__(self):
+        return auto_pretty_repr(self)
 
 
 Boolean = BooleanDefinition()

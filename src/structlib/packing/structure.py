@@ -2,7 +2,7 @@ from abc import ABC
 from typing import Protocol, Any, Tuple, BinaryIO
 
 from structlib.buffer_tools import write_data_to_buffer, read_data_from_buffer, write_data_to_stream, read_data_from_stream
-from structlib.packing.protocols import align_of, StructDefABC, size_of
+from structlib.packing.protocols import align_of, BaseStructDefABC, size_of
 
 from structlib.typing_ import WritableBuffer, ReadableBuffer
 
@@ -88,7 +88,7 @@ class StructIterPackableABC(ABC):
 
 
 # Dumb name; interpreted as "Structure" using 'Structure-pack', as opposed to 'Dataclass-pack' or 'Primitive-pack'
-class StructStructABC(StructPackableABC, StructIterPackableABC, StructDefABC, ABC):
+class StructStructABC(StructPackableABC, StructIterPackableABC, BaseStructDefABC, ABC):
     def pack(self, *args: Any) -> bytes:
         raise NotImplementedError
 

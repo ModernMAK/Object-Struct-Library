@@ -44,3 +44,22 @@ def generate_bools(chunk_count: int, seed: int, conv: Callable[[bytes], bool] = 
     conv = convert if conv is None else conv
     for _ in generate_random_chunks(1, chunk_count, seed):
         yield conv(_)
+
+
+UNIQUE_STRING_POOL = {
+    *"The Quick Brown Fox Jumped Over The Lazy Dog".split(),
+    *"What It's Like To Be A Teenage Clone A Rope Of Sand".split(),
+    *"She's Got A Little Book Of Conspiracies Right In Her Hand".split(),
+}
+STRING_POOL = list(UNIQUE_STRING_POOL)
+
+
+def generate_strings(chunk_count: int, seed: int, max_str_size: int):
+    rand = random.Random(seed)
+    pool = STRING_POOL  # Previously we converted the unique pool to a list here
+
+    for _ in range(chunk_count):
+        s_buf = rand.choice(pool)
+        while len(s_buf) < max_str_size and rand.choice([True, False]):
+            s_buf += " " + rand.choice(pool)
+        yield s_buf

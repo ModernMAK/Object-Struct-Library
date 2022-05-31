@@ -1,6 +1,6 @@
 import sys
 from enum import Enum
-from typing import Literal, Union
+from typing import Literal, Union, Optional
 
 
 class Endian(Enum):
@@ -11,14 +11,24 @@ class Endian(Enum):
 
 
 ByteOrderLiteral = Literal["little", "big"]
-
 ByteOrder = Union[Endian, ByteOrderLiteral]
 
 
-def resolve_byteorder(byteorder: ByteOrder = None) -> ByteOrderLiteral:
-    if not byteorder:
+def resolve_byteorder(byteorder: Optional[ByteOrder] = None) -> ByteOrderLiteral:
+    """
+    Resolves the argument to it's appropriate byteorder literal; 'little' or 'big'.
+
+    A value of None will use the local system's byteorder.
+
+    :param byteorder: The byteorder value to resolve; either an Endian enum, string literal ('little', 'big'), or None
+    :return: The string literal form of the byteorder; 'little' or 'big'
+    """
+    if byteorder is None:
         return sys.byteorder
     elif isinstance(byteorder, Endian):
         return byteorder.value
     else:
         return byteorder
+
+
+resolve_endian = resolve_byteorder  # Alias

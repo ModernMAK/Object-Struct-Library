@@ -2,7 +2,7 @@ from abc import ABC
 from typing import Protocol, Type, Tuple, BinaryIO, TypeVar
 
 from structlib.buffer_tools import write_data_to_buffer, read_data_from_buffer, read_data_from_stream, write_data_to_stream
-from structlib.packing.protocols import align_of, StructDef, StructDefABC, size_of
+from structlib.packing.protocols import align_of, StructDef, BaseStructDefABC, size_of, StructDefABC
 from structlib.typing_ import WritableBuffer, ReadableBuffer
 
 T = TypeVar("T")

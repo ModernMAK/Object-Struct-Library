@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import sys
-from abc import ABCMeta
+from abc import ABCMeta, ABC
 from collections import OrderedDict
 from io import BytesIO
 from typing import Any, Union, TypeVar, Tuple, Optional, BinaryIO, Dict, TYPE_CHECKING, ClassVar, Type, ForwardRef, _type_check, _eval_type
 
 from structlib.buffer_tools import write_data_to_buffer, write_data_to_stream, calculate_padding
 from structlib.byteorder import ByteOrder, resolve_byteorder
-from structlib.packing.protocols import struct_definition, struct_complete, align_of, endian_of, native_size_of, StructDefABC, size_of
+from structlib.packing.protocols import struct_definition, struct_complete, align_of, endian_of, native_size_of, BaseStructDefABC, size_of, StructDefABC
 from structlib.packing.structure import StructStructABC
 from structlib.typing_ import WritableBuffer
 
@@ -29,13 +29,12 @@ def args2struct(t: Union[Type[DataTypeStructDefABC], Type[DataclassStruct]], *ar
         return args
 
 
-def get_type_buffer(t: StructDefABC, data: Optional[bytes] = None) -> WritableBuffer:
+def get_type_buffer(t: BaseStructDefABC, data: Optional[bytes] = None) -> WritableBuffer:
     """
     Gets a buffer for the type specified; data is copied to the first len(data) bytes if specified.
-
-    :param t: Class/Instance of struct to build a buffer for
+    :param t: Class/Instance of struct to build a buffer for.
     :param data: The data to fill the buffer with (if present).
-    :return bytearray: An aligned buffer which can be written to.
+    :return: An aligned buffer which can be written to.
     """
     size = size_of(t)
     buffer = bytearray(size)
@@ -44,7 +43,7 @@ def get_type_buffer(t: StructDefABC, data: Optional[bytes] = None) -> WritableBu
     return buffer
 
 
-def _max_align_of(*types: Union[StructDefABC, StructDefABC]):
+def _max_align_of(*types: Union[BaseStructDefABC, BaseStructDefABC]):
     alignments = []
     for _type in types:
         alignment = align_of(_type)
@@ -55,7 +54,7 @@ def _max_align_of(*types: Union[StructDefABC, StructDefABC]):
     return max(alignments) if len(alignments) > 0 else None
 
 
-def _combined_size(*types: Union[StructDefABC, StructDefABC]):
+def _combined_size(*types: Union[BaseStructDefABC, BaseStructDefABC]):
     size = 0
     for t in types:
         t_size = size_of(t) + calculate_padding(align_of(t), size)
@@ -67,7 +66,7 @@ def _combined_size(*types: Union[StructDefABC, StructDefABC]):
 
 
 class Struct(StructStructABC):
-    def __init__(self, *types: Union[StructDefABC, StructDefABC], alignment: int = None, endian: ByteOrder):
+    def __init__(self, *types: Union[BaseStructDefABC, BaseStructDefABC], alignment: int = None, endian: ByteOrder = None):
         if alignment is None:
             alignment = _max_align_of(*types)
         size = _combined_size(*types)
@@ -116,7 +115,7 @@ class Struct(StructStructABC):
     def pack_buffer(self, buffer: WritableBuffer, *args: Any, offset: int = 0, origin: int = 0) -> int:
         alignment = align_of(self)
         data = self.pack(*args)
-        return write_data_to_buffer(buffer, data, align_as=alignment, offset=offset, origin=origin)
+        return write_data_to_buffer(buffer, data, alignment, offset=offset, origin=origin)
 
     def unpack_buffer(self, buffer: bytes, offset: int = 0, origin: int = 0) -> Tuple[int, Tuple[Any, ...]]:
         items = []
@@ -133,7 +132,7 @@ class Struct(StructStructABC):
     def pack_stream(self, stream: BinaryIO, *args: Any, origin: int = 0) -> int:
         alignment = align_of(self)
         data = self.pack(*args)
-        return write_data_to_stream(stream, data, align_as=alignment, origin=origin)
+        return write_data_to_stream(stream, data, alignment, origin=origin)
 
     def unpack_stream(self, stream: BinaryIO, origin: int = 0) -> Tuple[int, Tuple[Any, ...]]:
         items = []
@@ -149,8 +148,7 @@ class Struct(StructStructABC):
         return read, tuple(items)
 
 
-# @runtime_checkable (TypeError: @runtime_checkable can be only applied to protocol classes, got <class 'structlib.protocols.proto.DataTypeStructDef'>)
-class DataclassStruct(StructDefABC):
+class DataclassStruct(BaseStructDefABC):
     def __struct_struct2args__(self) -> Tuple[Any, ...]:
         ...
 
@@ -180,21 +178,21 @@ class DataclassStruct(StructDefABC):
         ...
 
 
-def eval_fwd_ref(self: ForwardRef, globalns, localns, recursive_guard=frozenset()):
+def eval_fwd_ref(self: ForwardRef, global_namespace, local_namespace, recursive_guard=frozenset()):
     if self.__forward_arg__ in recursive_guard:
         return self
-    if not self.__forward_evaluated__ or localns is not globalns:
-        if globalns is None and localns is None:
-            globalns = localns = {}
-        elif globalns is None:
-            globalns = localns
-        elif localns is None:
-            localns = globalns
+    if not self.__forward_evaluated__ or local_namespace is not global_namespace:
+        if global_namespace is None and local_namespace is None:
+            global_namespace = local_namespace = {}
+        elif global_namespace is None:
+            global_namespace = local_namespace
+        elif local_namespace is None:
+            local_namespace = global_namespace
         if self.__forward_module__ is not None:
-            globalns = getattr(
-                sys.modules.get(self.__forward_module__, None), '__dict__', globalns
+            global_namespace = getattr(
+                sys.modules.get(self.__forward_module__, None), '__dict__', global_namespace
             )
-        type_or_obj = eval(self.__forward_code__, globalns, localns)
+        type_or_obj = eval(self.__forward_code__, global_namespace, local_namespace)
         try:
             type_ = _type_check(
                 type_or_obj,
@@ -202,7 +200,7 @@ def eval_fwd_ref(self: ForwardRef, globalns, localns, recursive_guard=frozenset(
                 is_argument=self.__forward_is_argument__,
             )
             self.__forward_value__ = _eval_type(
-                type_, globalns, localns, recursive_guard | {self.__forward_arg__}
+                type_, global_namespace, local_namespace, recursive_guard | {self.__forward_arg__}
             )
             self.__forward_evaluated__ = True
         except TypeError:
@@ -238,8 +236,6 @@ def resolve_annotations(raw_annotations: Dict[str, Type[Any]], module_name: Opti
             except NameError:
                 # this is ok, it can be fixed with update_forward_refs
                 pass
-        # except TypeError:  # forwardref points to an object!
-        #     ...
         annotations[name] = value
     return annotations
 
@@ -250,7 +246,7 @@ class DataTypeStructDefMetaclass(ABCMeta, type):
         def __prepare__(cls, name, bases):
             return OrderedDict()
 
-    def __new__(mcs, name: str, bases: tuple[type, ...], attrs: Dict[str, Any], alignment: int = None, endian:ByteOrder=None):
+    def __new__(mcs, name: str, bases: tuple[type, ...], attrs: Dict[str, Any], alignment: int = None, endian: ByteOrder = None):
         if not bases:
             return super().__new__(mcs, name, bases, attrs)  # Abstract Base Class; AutoStruct
 
@@ -259,7 +255,7 @@ class DataTypeStructDefMetaclass(ABCMeta, type):
             typed_attr = {name: typing for name, typing in type_hints.items() if hasattr(typing, "__struct_def__")}
             ordered_attr = [name for name in type_hints.keys() if name in typed_attr]
             ordered_structs = [type_hints[attr] for attr in typed_attr]
-            attrs["__struct_def__"] = struct = Struct(*ordered_structs, alignment=alignment,endian=resolve_byteorder(endian))
+            attrs["__struct_def__"] = struct = Struct(*ordered_structs, alignment=alignment, endian=resolve_byteorder(endian))
             attrs["__struct_types__"] = typed_attr
             attrs["__struct_type_order__"] = tuple(ordered_attr)
             attrs["__struct_native_size__"] = native_size_of(struct)
@@ -268,13 +264,10 @@ class DataTypeStructDefMetaclass(ABCMeta, type):
         return super().__new__(mcs, name, bases, attrs)
 
 
-class DataTypeStructDefABC(StructDefABC, metaclass=DataTypeStructDefMetaclass):
-    def __init__(self):
-        pass  # Intentionally avoid calling super for TypeStructABC
-
+class DataTypeStructDefABC(StructDefABC, ABC, metaclass=DataTypeStructDefMetaclass):
     if TYPE_CHECKING:
-        __struct_def__: ClassVar[StructDefABC] = Struct()
-        __struct_types__: ClassVar[Dict[str, StructDefABC]] = {}
+        __struct_def__: ClassVar[BaseStructDefABC] = Struct()
+        __struct_types__: ClassVar[Dict[str, BaseStructDefABC]] = {}
         __struct_type_order__: ClassVar[Tuple[str, ...]]
 
     def __struct_struct2args__(self) -> Tuple[Any, ...]:
@@ -334,33 +327,3 @@ class DataTypeStructDefABC(StructDefABC, metaclass=DataTypeStructDefMetaclass):
         read, args = _def.unpack_stream(stream, origin=origin)
         inst = args2struct(cls, *args)
         return read, inst
-
-
-#
-#
-
-
-if __name__ == "__main__":
-    import integer
-
-
-    class MyIdea(DataTypeStructDefABC):
-        int8: integer.Int8
-        int16: integer.Int16
-        int32: integer.Int32
-        int64: integer.Int64(byteorder="big")
-
-        def __init__(self, *args):
-            super().__init__()
-            self.int8, self.int16, self.int32, self.int64 = args
-
-        def __str__(self):
-            return f"MyIdea(int8={self.int8}, int16={self.int16}, int32={self.int32}, int64={self.int64})"
-
-
-    inst = MyIdea(0x11, 0x22, 0x33, 0x44)
-    print(inst)
-    data = inst.pack()
-    print(data.hex(sep=" ", bytes_per_sep=1))
-    copy = MyIdea.unpack(data)
-    print(copy)

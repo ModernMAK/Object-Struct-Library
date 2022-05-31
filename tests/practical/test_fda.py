@@ -9,16 +9,79 @@
 # from structlib.definitions.structure import Struct
 # from structlib.enums import Endian
 #
-# UInt8 = UInt8Def(byteorder=Endian.Little)
-# Float32 = Float32Def(byteorder=Endian.Little)
-# Position = Normal = Array(3, Float32)
-# Uv = Array(2, Float32)
-# BoneWeight = Struct(Array(3, Float32), Array(4, UInt8))
-# Float3 = Tuple[float, float, float]
-# Float2 = Tuple[float, float]
-# Byte4 = Tuple[int, int, int, int]
-#
-#
+import dataclasses
+
+from structlib.byteorder import Endian
+from structlib.definitions.array import Array
+from structlib.definitions.floating import Float32
+from structlib.definitions.integer import UInt8
+from typing import Tuple, List, Optional
+
+from structlib.definitions.structure import Struct
+from structlib.packing.dataclass import DataclassStructABC
+
+Byte = UInt8_LE = UInt8(byteorder=Endian.Little)
+Float = Float32_LE = Float32(byteorder=Endian.Little)
+
+
+class TexCoord(DataclassStructABC):
+    x: Float
+    y: Float
+
+
+class VertexWeight(DataclassStructABC):
+    w0: Float
+    w1: Float
+    w2: Float
+
+    @property
+    def w3(self):
+        return 1 - (self.w0 + self.w1 + self.w2)
+
+    b0: Byte
+    b1: Byte
+    b2: Byte
+    b3: Byte
+
+    def get_pairs(self) -> Tuple[Tuple[float, int], ...]:
+        return (self.w0, self.b0), \
+               (self.w1, self.b1), \
+               (self.w2, self.b2), \
+               (self.w3, self.b3)
+
+
+class FloatXYZ(DataclassStructABC):
+    x: Float
+    y: Float
+    z: Float
+
+
+Normal = Position = FloatXYZ
+
+
+class AssembledVertex:
+    position: Position
+    normal: Normal
+    weights:Optional[VertexWeight]
+    texture_coord:TexCoord
+
+
+AssembledVertexBuffer = List[AssembledVertex]
+
+
+class VertexBufferDefinition(DataclassStructABC):
+
+    SIMPLE_BUFFER_SIZE = 12 + 12 + 8
+    EXTENDED_BUFFER_SIZE = SIMPLE_BUFFER_SIZE + (12 + 4)
+
+    def __init__(self, v_size: int, v_count: int):
+        super().__init__()
+        lookup = {
+            self.SIMPLE_BUFFER_SIZE: [Array(v_count, Position), Array(v_count, Normal), Array(v_count, TexCoord)],
+            self.EXTENDED_BUFFER_SIZE: [Array(v_count, Position), Array(v_count, VertexWeight), Array(v_count, Normal), Array(v_count, TexCoord)],
+        }
+        layout = lookup[v_size]
+        self.__struct_def__ = Struct(*layout)
 #
 # class VertexBuffer():
 #     def __init__(self, v_count, v_size):

@@ -1,7 +1,7 @@
 import warnings
-from typing import Any, Optional
+from typing import Any
 
-from structlib.byteorder import Endian, ByteOrder, resolve_byteorder
+from structlib.byteorder import Endian, resolve_byteorder
 from structlib.packing.protocols import endian_as, endian_of
 
 

@@ -1,64 +1,79 @@
-from typing import Tuple
+from structlib.byteorder import ByteOrder, resolve_byteorder
+from structlib.packing.primitive import PrimitiveStructABC
+from structlib.packing.protocols import align_of, size_of, endian_of, T
+from structlib.utils import default_if_none, pretty_str, auto_pretty_repr
 
-from structlib.definitions.structure import _DepricatedPrimTypeStructDef
-from structlib.packing.protocols import align_of, size_of
-from structlib.utils import default_if_none
 
-
-class StringBuffer(_DepricatedPrimTypeStructDef):
+class StringBuffer(PrimitiveStructABC):
     """
     Represents a fixed-buffer string.
 
     When packing; the string will be padded to fill the buffer
     When unpacking; padding is preserved
     """
+
+    def __struct_endian_as__(self: T, endian: ByteOrder) -> T:
+        return self(endian=endian)
+
+    def __struct_align_as__(self: T, alignment: int) -> T:
+        return self(alignment=alignment)
+
     _DEFAULT_ENCODING = "ascii"
 
-    def __init__(self, size: int, align_as: int = None, encoding: str = None):
-        # TODO how to align arrays?!
-        #   Is it per element? Or to the first pointer?
-        #       Unrelated; my understanding of size_of seems to be wrong `https://stackoverflow.com/questions/44023546/c-alignment-and-arrays`
-        # FOR NOW, align to size and avoid the issue altogether (or the align specified)
-        align = default_if_none(align_as, 1)
-        super().__init__(size,align,self)
+    def __init__(self, size: int, encoding: str = None, *, alignment: int = None, endian: ByteOrder = None):
+        alignment = default_if_none(alignment, 1)
+        super().__init__(size, alignment, self, endian=resolve_byteorder(endian))
         self._encoding = default_if_none(encoding, self._DEFAULT_ENCODING)
 
-    def __call__(self, size: int = None, align_as: int = None, encoding: str = None):
+    def __call__(self, size: int = None, encoding: str = None, alignment: int = None, endian: ByteOrder = None):
         # self.__class__ allows inheritors to use their class instead
-        return self.__class__(size=default_if_none(size, size_of(self)), align_as=default_if_none(align_as, align_of(self)), encoding=default_if_none(encoding, self._encoding))
+        return self.__class__(size=default_if_none(size, size_of(self)), alignment=default_if_none(alignment, align_of(self)), endian=default_if_none(endian, endian_of(self)), encoding=default_if_none(encoding, self._encoding))
 
     def __eq__(self, other):
         return super().__eq__(other) and \
                self._encoding == other._encoding
 
-    def _pack(self, *args: str) -> bytes:
-        encoded = args[0].encode(self._encoding)
+    def pack(self, arg: str) -> bytes:
+        encoded = arg.encode(self._encoding)
         buf = bytearray(encoded)
         size = size_of(self)
         if len(buf) > size:
-            raise NotImplementedError
+            raise
         elif len(buf) < size:
             buf.extend([0x00] * (size - len(buf)))
         return buf
 
-    def _unpack(self, buffer: bytes) -> Tuple[str,...]:
-        return buffer.decode(encoding=self._encoding),
+    def unpack(self, buffer: bytes) -> str:
+        return buffer.decode(encoding=self._encoding)
 
     def __str__(self):
-        return f"String [{size_of(self)}] ({self._encoding})"
+        name = f"String [{size_of(self)}] ({self._encoding})"
+        endian = endian_of(self)
+        alignment = align_of(self)
+        return pretty_str(name, endian, alignment)
+
+    def __repr__(self):
+        return auto_pretty_repr(self)
 
 
 class CStringBuffer(StringBuffer):
     """
     A Fixed string buffer that will auto-strip trailing `\0` when unpacking.
 
-    Otherwise, it functions identically to StringBuffer
+    Otherwise, it functions identically to StringBuffer.
     """
-    def _unpack(self, buffer: bytes) -> Tuple[str,...]:
-        return buffer.decode(encoding=self._encoding).rstrip("\0"),
+
+    def unpack(self, buffer: bytes) -> str:
+        return buffer.decode(encoding=self._encoding).rstrip("\0")
 
     def __str__(self):
-        return f"CString [{size_of(self)}] ({self._encoding})"
+        name = f"CString [{size_of(self)}] ({self._encoding})"
+        endian = endian_of(self)
+        alignment = align_of(self)
+        return pretty_str(name, endian, alignment)
+
+    def __repr__(self):
+        return auto_pretty_repr(self)
 
 
 # class _PascalString(SubStructLikeMixin):
@@ -141,6 +156,3 @@ class CStringBuffer(StringBuffer):
 # PString32 = PascalStringDefinition(integer.UInt32)
 # PString64 = PascalStringDefinition(integer.UInt64)
 # PString128 = PascalStringDefinition(integer.UInt128)
-
-if __name__ == "__main__":
-    ...
