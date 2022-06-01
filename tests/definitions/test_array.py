@@ -1,24 +1,53 @@
-from typing import List, Literal
+from abc import ABC
+from typing import List, Literal, Any
 
 import rng
 from definitions.common_tests.test_alignment import AlignmentTests
 from definitions.common_tests.test_definition import DefinitionTests
-from definitions.common_tests.test_endian import EndianTests, classproperty
+from definitions.common_tests.test_byteorder import ByteorderTests, classproperty
 from definitions.common_tests.test_primitive import PrimitiveTests, Sample2Bytes
-from structlib.buffer_tools import calculate_padding
-from structlib.byteorder import ByteOrder, resolve_byteorder
-from structlib.definitions import integer as _integer, floating
-from structlib.definitions.array import Array
-from structlib.definitions.floating import _Float
-from structlib.definitions.integer import IntegerDefinition
-from structlib.packing.protocols import align_of, endian_of, native_size_of, endian_as
+from structlib.byteorder import ByteOrder, resolve_byteorder, NativeEndian, BigEndian, LittleEndian, NetworkEndian
+from structlib.protocols.packing import PrimitivePackable
+from structlib.protocols.typedef import TypeDefAlignable, align_of, native_size_of, byteorder_of, TypeDefByteOrder, byteorder_as, calculate_padding
+from structlib.typedefs import integer, floating
+from structlib.typedefs.array import Array
+from structlib.typedefs.floating import FloatDefinition
+from structlib.typedefs.integer import IntegerDefinition
 
 
 # AVOID using test as prefix
-class ArrayTests(AlignmentTests, EndianTests, PrimitiveTests, DefinitionTests):
+class ArrayTests(AlignmentTests, PrimitiveTests, DefinitionTests, ABC):
     """
     Represents a container for testing an Array
     """
+
+    @classproperty
+    def EQUAL_DEFINITIONS(self) -> List[Any]:
+        return [Array(self.ARR_SIZE, self.ARR_TYPE)]
+
+    @classproperty
+    def INEQUAL_DEFINITIONS(self) -> List[Any]:
+        return [Array(self.ARR_SIZE + 1, self.ARR_TYPE)]
+
+    @classproperty
+    def ALIGNABLE_TYPEDEFS(self) -> List[TypeDefAlignable]:
+        return [Array(self.ARR_SIZE, self.ARR_TYPE)]
+
+    @classproperty
+    def NATIVE_PACKABLE(self) -> List[PrimitivePackable]:
+        return [Array(self.ARR_SIZE, self.ARR_TYPE)]
+
+    @classproperty
+    def BIG_PACKABLE(self) -> List[PrimitivePackable]:
+        return []
+
+    @classproperty
+    def LITTLE_PACKABLE(self) -> List[PrimitivePackable]:
+        return []
+
+    @classproperty
+    def NETWORK_PACKABLE(self) -> List[PrimitivePackable]:
+        return []
 
     @classproperty
     def ALIGN(self) -> int:
@@ -60,8 +89,8 @@ class ArrayTests(AlignmentTests, EndianTests, PrimitiveTests, DefinitionTests):
         s_per_seed = s_count // len(seeds)
         r = []
         for seed in seeds:
-            for gen_seeds in rng.generate_seeds(s_per_seed, seed):
-                gen = self.INNER_SAMPLES(gen_seeds)
+            for gen_seed in rng.generate_seeds(s_per_seed, seed):
+                gen = self.INNER_SAMPLES(gen_seed)
                 r.append(gen)
         return r
 
@@ -74,45 +103,37 @@ class ArrayTests(AlignmentTests, EndianTests, PrimitiveTests, DefinitionTests):
     def DEFINITION(self) -> Array:
         return None
 
-    # Literal CONSTS; shouldn't change
-    _LE: Literal["little"] = "little"
-    _BE: Literal["big"] = "big"
-
     @classproperty
     def ARR_TYPE(self):
         raise NotImplementedError
 
-    @classproperty
-    def CLS(self) -> Array:
-        return Array(self.ARR_SIZE, self.ARR_TYPE)
 
+class IntegerArrayTests(ArrayTests, ByteorderTests):
     @classproperty
-    def CLS_LE(self) -> Array:
-        return endian_as(self.CLS, self._LE)
+    def BYTEORDER_TYPEDEFS(self) -> List[TypeDefByteOrder]:
+        return [Array(self.ARR_SIZE, self.ARR_TYPE)]
 
     @classproperty
-    def CLS_BE(self) -> Array:
-        return endian_as(self.CLS, self._BE)
+    def NATIVE_PACKABLE(self) -> List[PrimitivePackable]:
+        return [Array(self.ARR_SIZE, byteorder_as(self.ARR_TYPE, NativeEndian))]
 
     @classproperty
-    def INST(self) -> Array:
-        return self.CLS()  # calling the instantiate method; not the property
+    def BIG_PACKABLE(self) -> List[PrimitivePackable]:
+        return [Array(self.ARR_SIZE, byteorder_as(self.ARR_TYPE, BigEndian))]
 
     @classproperty
-    def INST_LE(self) -> Array:
-        return endian_as(self.INST, self._LE)
+    def LITTLE_PACKABLE(self) -> List[PrimitivePackable]:
+        return [Array(self.ARR_SIZE, byteorder_as(self.ARR_TYPE, LittleEndian))]
 
     @classproperty
-    def INST_BE(self) -> Array:
-        return endian_as(self.INST, self._BE)
+    def NETWORK_PACKABLE(self) -> List[PrimitivePackable]:
+        return [Array(self.ARR_SIZE, byteorder_as(self.ARR_TYPE, NetworkEndian))]
 
-
-class IntegerArrayTests(ArrayTests):
     @classmethod
-    def get_sample2bytes(cls, endian: ByteOrder, alignment: int) -> Sample2Bytes:
+    def get_sample2bytes(cls, byteorder: ByteOrder, alignment: int) -> Sample2Bytes:
         internal_size = native_size_of(cls.ARR_TYPE)
-        padded_size = calculate_padding(alignment,internal_size)
-        byteorder = resolve_byteorder(endian)
+        padded_size = calculate_padding(alignment, internal_size)
+        byteorder = resolve_byteorder(byteorder)
         signed = cls.ARR_TYPE._signed
         padding = bytearray(padded_size)
 
@@ -130,8 +151,8 @@ class IntegerArrayTests(ArrayTests):
         _type: IntegerDefinition = cls.ARR_TYPE
         bit_size = native_size_of(_type)
         signed = _type._signed
-        endian = endian_of(_type)
-        gen = rng.generate_ints(cls.ARR_SIZE, seed, bit_size * 8, signed, endian)
+        byteorder = byteorder_of(_type)
+        gen = rng.generate_ints(cls.ARR_SIZE, seed, bit_size * 8, signed, byteorder)
         return list(gen)
 
     @classproperty
@@ -146,76 +167,97 @@ class IntegerArrayTests(ArrayTests):
 class TestInt8(IntegerArrayTests):
     @classproperty
     def ARR_TYPE(self) -> Array:
-        return _integer.Int8
+        return integer.Int8
 
 
 class TestUInt8(IntegerArrayTests):
     @classproperty
     def ARR_TYPE(self) -> Array:
-        return _integer.UInt8
+        return integer.UInt8
 
 
 class TestInt16(IntegerArrayTests):
     @classproperty
     def ARR_TYPE(self) -> Array:
-        return _integer.Int16
+        return integer.Int16
 
 
 class TestUInt16(IntegerArrayTests):
     @classproperty
     def ARR_TYPE(self) -> Array:
-        return _integer.UInt16
+        return integer.UInt16
 
 
 class TestInt32(IntegerArrayTests):
     @classproperty
     def ARR_TYPE(self) -> Array:
-        return _integer.Int32
+        return integer.Int32
 
 
 class TestUInt32(IntegerArrayTests):
     @classproperty
     def ARR_TYPE(self) -> Array:
-        return _integer.UInt32
+        return integer.UInt32
 
 
 class TestInt64(IntegerArrayTests):
     @classproperty
     def ARR_TYPE(self) -> Array:
-        return _integer.Int64
+        return integer.Int64
 
 
 class TestUInt64(IntegerArrayTests):
     @classproperty
     def ARR_TYPE(self) -> Array:
-        return _integer.UInt64
+        return integer.UInt64
 
 
 class TestInt128(IntegerArrayTests):
     @classproperty
     def ARR_TYPE(self) -> Array:
-        return _integer.Int128
+        return integer.Int128
 
 
 class TestUInt128(IntegerArrayTests):
     @classproperty
     def ARR_TYPE(self) -> Array:
-        return _integer.UInt128
+        return integer.UInt128
 
 
-class FloatArrayTests(ArrayTests):
+class FloatArrayTests(ArrayTests, ByteorderTests):
+
+    @classproperty
+    def BYTEORDER_TYPEDEFS(self) -> List[TypeDefByteOrder]:
+        return [Array(self.ARR_SIZE, self.ARR_TYPE)]
+
+    @classproperty
+    def NATIVE_PACKABLE(self) -> List[PrimitivePackable]:
+        return [Array(self.ARR_SIZE, self.ARR_TYPE)]
+
+    @classproperty
+    def BIG_PACKABLE(self) -> List[PrimitivePackable]:
+        return []
+
+    @classproperty
+    def LITTLE_PACKABLE(self) -> List[PrimitivePackable]:
+        return []
+
+    @classproperty
+    def NETWORK_PACKABLE(self) -> List[PrimitivePackable]:
+        return []
 
     @classmethod
-    def get_sample2bytes(cls, endian: ByteOrder, alignment: int) -> Sample2Bytes:
-        internal_size = native_size_of(cls.ARR_TYPE)
-        padded_size = calculate_padding(alignment, internal_size)
-        struct = _Float.INTERNAL_STRUCTS[(internal_size * 8, resolve_byteorder(endian))]
+    def get_sample2bytes(cls, byteorder: ByteOrder, alignment: int) -> Sample2Bytes:
+        _type: FloatDefinition = cls.ARR_TYPE
+        byte_size = native_size_of(_type)
+        padded_size = calculate_padding(alignment, byte_size)
+        struct = FloatDefinition.INTERNAL_STRUCTS[(byte_size * 8, resolve_byteorder(byteorder))]
         padding = bytearray(padded_size)
 
         def wrapper(s: List[float]) -> bytes:
             converted = [struct.pack(_) for _ in s]
             full = padding.join(converted)
-            # Append padding to last element
+            # Append padding to last element-
             full.extend(padding)
             return full
 
@@ -223,10 +265,10 @@ class FloatArrayTests(ArrayTests):
 
     @classmethod
     def INNER_SAMPLES(cls, seed):
-        _type: IntegerDefinition = cls.ARR_TYPE
-        bit_size = native_size_of(_type)
-        endian = endian_of(_type)
-        gen = rng.generate_floats(cls.ARR_SIZE, seed, bit_size * 8, endian)
+        _type: FloatDefinition = cls.ARR_TYPE
+        byte_size = native_size_of(_type)
+        # byteorder = byteorder_of(_type)
+        gen = rng.generate_floats(cls.ARR_SIZE, seed, byte_size * 8, NativeEndian)
         return list(gen)
 
     @classproperty

@@ -1,5 +1,16 @@
+from typing import List, Union
+
+
 class StructError(Exception):
     ...
+
+
+def pretty_func_name(self, func):
+    return f"{self.__class__.__name__}.{func.__name__}"
+
+
+def PrettyNotImplementedError(self, func):
+    return NotImplementedError(f"`{pretty_func_name(self, func)}` was not implemented!")
 
 
 class UnpackError(StructError):
@@ -15,7 +26,7 @@ class ArgTypeError(PackError):
 
 
 class ArgCountError(StructError):
-    def __init__(self, class_or_func_name: str, received_args: int, expected_args: int):
+    def __init__(self, class_or_func_name: str, received_args: int, expected_args: Union[List[int],int]):
         self.name = class_or_func_name
         self.received_args = received_args
         self.expected_args = expected_args

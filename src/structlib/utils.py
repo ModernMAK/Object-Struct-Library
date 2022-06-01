@@ -1,6 +1,6 @@
 from typing import Any, Optional
 
-from structlib.byteorder import ByteOrderLiteral
+from structlib.byteorder import ByteOrder
 from structlib.typing_ import ReadableBuffer
 
 
@@ -17,18 +17,18 @@ def generate_chunks_from_buffer(buffer: ReadableBuffer, count: int, chunk_size: 
         yield buffer[offset + _ * chunk_size:offset + (_ + 1) * chunk_size]
 
 
-def pretty_repr(repr, msg) -> str:
+def pretty_repr(_repr, msg) -> str:
     """
     Inserts the msg into the 'repr' string between the first two words
 
     E.G.
     <MyClass (my message) object at 0x00112233>
 
-    :param repr: The 'repr' string to parse and modify
+    :param _repr: The 'repr' string to parse and modify
     :param msg: The message to insert at the first 'space' character
     :return: Repr string with `msg` inserted at the first space.
     """
-    pre, post = repr.split(" ", maxsplit=1)  # split before object
+    pre, post = _repr.split(" ", maxsplit=1)  # split before object
     return pre + f" ({msg}) " + post
 
 
@@ -38,7 +38,7 @@ def auto_pretty_repr(self) -> str:
     return pretty_repr(repr, msg)
 
 
-def pretty_str(name: str, endian: ByteOrderLiteral, alignment: Optional[int]):
+def pretty_str(name: str, endian: ByteOrder, alignment: Optional[int]):
     str_endian = f'{endian[0]}e'  # HACK, _byteorder should be one of the literals 'l'ittle or 'b'ig
     str_align = f'-@{alignment}' if alignment is None else ''
     return f"{name}-{str_endian}{str_align}"

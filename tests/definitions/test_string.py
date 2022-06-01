@@ -1,16 +1,46 @@
-from typing import List
+from typing import List, Any
 
 import rng
-from definitions.common_tests.test_alignment import AlignmentTests
-from definitions.common_tests.test_definition import DefinitionTests
-from definitions.common_tests.test_endian import EndianTests
-from definitions.common_tests.test_primitive import PrimitiveTests, Sample2Bytes
+from definitions.common_tests import  AlignmentTests, DefinitionTests, PrimitiveTests, Sample2Bytes
 from definitions.util import classproperty
 from structlib.byteorder import ByteOrder
-from structlib.definitions.strings import StringBuffer, CStringBuffer
+from structlib.protocols.packing import PrimitivePackable
+from structlib.protocols.typedef import TypeDefAlignable
+from structlib.typedefs.strings import StringBuffer, CStringBuffer
 
 
-class TestString(PrimitiveTests, DefinitionTests, EndianTests, AlignmentTests):
+class TestString(PrimitiveTests, DefinitionTests,  AlignmentTests):
+    @classproperty
+    def NATIVE_PACKABLE(self) -> List[PrimitivePackable]:
+        return [StringBuffer(self.ARR_SIZE, encoding=self.ENCODING)]
+
+    @classproperty
+    def EQUAL_DEFINITIONS(self) -> List[Any]:
+        return [StringBuffer(self.ARR_SIZE, encoding=self.ENCODING)]
+
+    @classproperty
+    def INEQUAL_DEFINITIONS(self) -> List[Any]:
+        return [
+            StringBuffer(self.ARR_SIZE, encoding="utf-8"),
+            StringBuffer(self.ARR_SIZE + 1, encoding=self.ENCODING),
+        ]
+
+    @classproperty
+    def ALIGNABLE_TYPEDEFS(self) -> List[TypeDefAlignable]:
+        return [StringBuffer(self.ARR_SIZE, encoding=self.ENCODING)]
+
+    @classproperty
+    def BIG_PACKABLE(self) -> List[PrimitivePackable]:
+        return []
+
+    @classproperty
+    def LITTLE_PACKABLE(self) -> List[PrimitivePackable]:
+        return []
+
+    @classproperty
+    def NETWORK_PACKABLE(self) -> List[PrimitivePackable]:
+        return []
+
     @classmethod
     def get_sample2bytes(cls, endian: ByteOrder = None, alignment: int = None) -> Sample2Bytes:
         size = cls.ARR_SIZE
@@ -86,30 +116,6 @@ class TestString(PrimitiveTests, DefinitionTests, EndianTests, AlignmentTests):
     def ALIGN(self) -> int:
         return 1
 
-    @classproperty
-    def CLS(self) -> StringBuffer:
-        return StringBuffer(self.NATIVE_SIZE, self.ENCODING, endian=self._NATIVE)
-
-    @classproperty
-    def CLS_LE(self) -> StringBuffer:
-        return StringBuffer(self.NATIVE_SIZE, self.ENCODING, endian=self._LE)
-
-    @classproperty
-    def CLS_BE(self) -> StringBuffer:
-        return StringBuffer(self.NATIVE_SIZE, self.ENCODING, endian=self._BE)
-
-    @classproperty
-    def INST(self) -> StringBuffer:
-        return StringBuffer(self.NATIVE_SIZE, self.ENCODING, endian=self._NATIVE)()
-
-    @classproperty
-    def INST_LE(self) -> StringBuffer:
-        return StringBuffer(self.NATIVE_SIZE, self.ENCODING, endian=self._LE)()
-
-    @classproperty
-    def INST_BE(self) -> StringBuffer:
-        return StringBuffer(self.NATIVE_SIZE, self.ENCODING, endian=self._BE)()
-
 
 class TestCString(TestString):
     @classproperty
@@ -125,25 +131,20 @@ class TestCString(TestString):
         return r
 
     @classproperty
-    def CLS(self) -> StringBuffer:
-        return CStringBuffer(self.NATIVE_SIZE, self.ENCODING, endian=self._NATIVE)
+    def NATIVE_PACKABLE(self) -> List[PrimitivePackable]:
+        return [CStringBuffer(self.ARR_SIZE, encoding=self.ENCODING)]
 
     @classproperty
-    def CLS_LE(self) -> StringBuffer:
-        return CStringBuffer(self.NATIVE_SIZE, self.ENCODING, endian=self._LE)
+    def EQUAL_DEFINITIONS(self) -> List[Any]:
+        return [CStringBuffer(self.ARR_SIZE, encoding=self.ENCODING)]
 
     @classproperty
-    def CLS_BE(self) -> StringBuffer:
-        return CStringBuffer(self.NATIVE_SIZE, self.ENCODING, endian=self._BE)
+    def INEQUAL_DEFINITIONS(self) -> List[Any]:
+        return [
+            CStringBuffer(self.ARR_SIZE, encoding="utf-8"),
+            CStringBuffer(self.ARR_SIZE + 1, encoding=self.ENCODING),
+        ]
 
     @classproperty
-    def INST(self) -> StringBuffer:
-        return CStringBuffer(self.NATIVE_SIZE, self.ENCODING, endian=self._NATIVE)()
-
-    @classproperty
-    def INST_LE(self) -> StringBuffer:
-        return CStringBuffer(self.NATIVE_SIZE, self.ENCODING, endian=self._LE)()
-
-    @classproperty
-    def INST_BE(self) -> StringBuffer:
-        return CStringBuffer(self.NATIVE_SIZE, self.ENCODING, endian=self._BE)()
+    def ALIGNABLE_TYPEDEFS(self) -> List[TypeDefAlignable]:
+        return [CStringBuffer(self.ARR_SIZE, encoding=self.ENCODING)]

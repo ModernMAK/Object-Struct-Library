@@ -1,25 +1,70 @@
-from typing import List
+from typing import List, Any
 
 import rng
-from definitions.common_tests.test_alignment import AlignmentTests
-from definitions.common_tests.test_definition import DefinitionTests
-from definitions.common_tests.test_endian import EndianTests
-from definitions.common_tests.test_primitive import PrimitiveTests, Sample2Bytes
+from definitions.common_tests import AlignmentTests, DefinitionTests, ByteorderTests,  PrimitiveTests, Sample2Bytes
 from definitions.util import classproperty
-from structlib.byteorder import ByteOrder, resolve_endian
-from structlib.definitions import integer as _integer
-from structlib.definitions.integer import IntegerDefinition
+from structlib.byteorder import ByteOrder, resolve_byteorder, NetworkEndian, LittleEndian, NativeEndian, BigEndian
+from structlib.protocols.packing import Packable
+from structlib.protocols.typedef import TypeDefAlignable, TypeDefByteOrder
+from structlib.typedefs import integer as _integer
+from structlib.typedefs.integer import IntegerDefinition
 from structlib.utils import default_if_none
 
 
 # AVOID using test as prefix
-class IntegerTests(AlignmentTests, EndianTests, PrimitiveTests, DefinitionTests):
+class IntegerTests(AlignmentTests, ByteorderTests, PrimitiveTests, DefinitionTests):
+    @classproperty
+    def EQUAL_DEFINITIONS(self) -> List[Any]:
+        if NativeEndian == "big":
+            return [*self.NATIVE_PACKABLE, *self.BIG_PACKABLE, *self.NETWORK_PACKABLE]
+        else:
+            return [*self.NATIVE_PACKABLE, *self.LITTLE_PACKABLE]
+
+    @classproperty
+    def INEQUAL_DEFINITIONS(self) -> List[Any]:
+        if NativeEndian == "little":
+            return [*self.BIG_PACKABLE, *self.NETWORK_PACKABLE]
+        else:
+            return self.LITTLE_PACKABLE
+
+    @classproperty
+    def NATIVE_PACKABLE(self) -> List[Packable]:
+        return [
+            IntegerDefinition(self.NATIVE_SIZE, self.SIGNED, byteorder=NativeEndian)
+        ]
+
+    @classproperty
+    def BIG_PACKABLE(self) -> List[Packable]:
+        return [
+            IntegerDefinition(self.NATIVE_SIZE, self.SIGNED, byteorder=BigEndian)
+        ]
+
+    @classproperty
+    def LITTLE_PACKABLE(self) -> List[Packable]:
+        return [
+            IntegerDefinition(self.NATIVE_SIZE, self.SIGNED, byteorder=LittleEndian)
+        ]
+
+    @classproperty
+    def NETWORK_PACKABLE(self) -> List[Packable]:
+        return [
+            IntegerDefinition(self.NATIVE_SIZE, self.SIGNED, byteorder=NetworkEndian)
+        ]
+
+    @classproperty
+    def ALIGNABLE_TYPEDEFS(self) -> List[TypeDefAlignable]:
+        return [*self.NATIVE_PACKABLE, *self.BIG_PACKABLE, *self.LITTLE_PACKABLE, *self.NETWORK_PACKABLE]
+
+    @classproperty
+    def BYTEORDER_TYPEDEFS(self) -> List[TypeDefByteOrder]:
+        return [*self.NATIVE_PACKABLE, *self.BIG_PACKABLE, *self.LITTLE_PACKABLE, *self.NETWORK_PACKABLE]
+
     @classmethod
-    def get_sample2bytes(cls, endian: ByteOrder = None, alignment: int = None) -> Sample2Bytes:
-        endian = default_if_none(endian, cls._NATIVE)
+    def get_sample2bytes(cls, byteorder: ByteOrder = None, alignment: int = None) -> Sample2Bytes:
+        byteorder = default_if_none(byteorder, NativeEndian)
         # alignment doesnt do anything? why'd i include it?
         size = cls.NATIVE_SIZE
-        byteorder = resolve_endian(endian)
+        byteorder = resolve_byteorder(byteorder)
         signed = cls.SIGNED
 
         def s2b(s: int) -> bytes:
@@ -51,7 +96,7 @@ class IntegerTests(AlignmentTests, EndianTests, PrimitiveTests, DefinitionTests)
         s_per_seed = s_count // len(seeds)
         signed = self.SIGNED
         byte_size = self.NATIVE_SIZE
-        byteorder = self._NATIVE
+        byteorder = NativeEndian
         r = []
         for seed in seeds:
             gen = rng.generate_ints(s_per_seed, seed, byte_size * 8, signed, byteorder=byteorder)
@@ -78,30 +123,6 @@ class IntegerTests(AlignmentTests, EndianTests, PrimitiveTests, DefinitionTests)
     @classproperty
     def ALIGN(self) -> int:
         return self.NATIVE_SIZE
-
-    @classproperty
-    def CLS(self) -> IntegerDefinition:
-        return IntegerDefinition(self.NATIVE_SIZE, self.SIGNED, byteorder=self._NATIVE)
-
-    @classproperty
-    def CLS_LE(self) -> IntegerDefinition:
-        return IntegerDefinition(self.NATIVE_SIZE, self.SIGNED, byteorder=self._LE)
-
-    @classproperty
-    def CLS_BE(self) -> IntegerDefinition:
-        return IntegerDefinition(self.NATIVE_SIZE, self.SIGNED, byteorder=self._BE)
-
-    @classproperty
-    def INST(self) -> IntegerDefinition:
-        return IntegerDefinition(self.NATIVE_SIZE, self.SIGNED, byteorder=self._NATIVE)()
-
-    @classproperty
-    def INST_LE(self) -> IntegerDefinition:
-        return IntegerDefinition(self.NATIVE_SIZE, self.SIGNED, byteorder=self._LE)()
-
-    @classproperty
-    def INST_BE(self) -> IntegerDefinition:
-        return IntegerDefinition(self.NATIVE_SIZE, self.SIGNED, byteorder=self._BE)()
 
 
 class TestInt8(IntegerTests):

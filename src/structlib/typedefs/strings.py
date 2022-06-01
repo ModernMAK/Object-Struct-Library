@@ -1,10 +1,13 @@
-from structlib.byteorder import ByteOrder, resolve_byteorder
-from structlib.packing.primitive import PrimitiveStructABC
-from structlib.packing.protocols import align_of, size_of, endian_of, T
-from structlib.utils import default_if_none, pretty_str, auto_pretty_repr
+from typing import Tuple
+
+from structlib.abc_.packing import PrimitivePackableABC, IterPackableABC
+from structlib.abc_.typedef import TypeDefSizableABC, TypeDefAlignableABC
+from structlib.protocols.typedef import size_of, align_of
+from structlib.typedefs.integer import IntegerDefinition
+from structlib.utils import default_if_none, auto_pretty_repr
 
 
-class StringBuffer(PrimitiveStructABC):
+class StringBuffer(PrimitivePackableABC, IterPackableABC, TypeDefSizableABC, TypeDefAlignableABC):
     """
     Represents a fixed-buffer string.
 
@@ -12,28 +15,7 @@ class StringBuffer(PrimitiveStructABC):
     When unpacking; padding is preserved
     """
 
-    def __struct_endian_as__(self: T, endian: ByteOrder) -> T:
-        return self(endian=endian)
-
-    def __struct_align_as__(self: T, alignment: int) -> T:
-        return self(alignment=alignment)
-
-    _DEFAULT_ENCODING = "ascii"
-
-    def __init__(self, size: int, encoding: str = None, *, alignment: int = None, endian: ByteOrder = None):
-        alignment = default_if_none(alignment, 1)
-        super().__init__(size, alignment, self, endian=resolve_byteorder(endian))
-        self._encoding = default_if_none(encoding, self._DEFAULT_ENCODING)
-
-    def __call__(self, size: int = None, encoding: str = None, alignment: int = None, endian: ByteOrder = None):
-        # self.__class__ allows inheritors to use their class instead
-        return self.__class__(size=default_if_none(size, size_of(self)), alignment=default_if_none(alignment, align_of(self)), endian=default_if_none(endian, endian_of(self)), encoding=default_if_none(encoding, self._encoding))
-
-    def __eq__(self, other):
-        return super().__eq__(other) and \
-               self._encoding == other._encoding
-
-    def pack(self, arg: str) -> bytes:
+    def prim_pack(self, arg: str) -> bytes:
         encoded = arg.encode(self._encoding)
         buf = bytearray(encoded)
         size = size_of(self)
@@ -43,14 +25,95 @@ class StringBuffer(PrimitiveStructABC):
             buf.extend([0x00] * (size - len(buf)))
         return buf
 
-    def unpack(self, buffer: bytes) -> str:
+    def unpack_prim(self, buffer: bytes) -> str:
         return buffer.decode(encoding=self._encoding)
+
+    def iter_pack(self, *args: str) -> bytes:
+        parts = [self.prim_pack(arg) for arg in args]
+        empty = bytearray()
+        return empty.join(parts)
+
+    def iter_unpack(self, buffer: bytes, iter_count: int) -> Tuple[str, ...]:
+        size = size_of(self)
+        partials = [buffer[i * size:(i + 1) * size] for i in range(iter_count)]
+        unpacked = [self.unpack_prim(partial) for partial in partials]
+        return tuple(unpacked)
+
+    _DEFAULT_ENCODING = "ascii"
+
+    def __init__(self, size: int, encoding: str = None, *, alignment: int = None):
+        alignment = default_if_none(alignment, 1)
+        TypeDefSizableABC.__init__(self, size)
+        TypeDefAlignableABC.__init__(self, alignment)
+        self._encoding = default_if_none(encoding, self._DEFAULT_ENCODING)
+
+    def __eq__(self, other):
+        if self is other:
+            return True
+        elif isinstance(other, StringBuffer):
+            return self.__typedef_alignment__ == other.__typedef_alignment__ and \
+                   self.__typedef_native_size__ == other.__typedef_native_size__ and \
+                   self._encoding == other._encoding
+        else:
+            return False
 
     def __str__(self):
         name = f"String [{size_of(self)}] ({self._encoding})"
-        endian = endian_of(self)
         alignment = align_of(self)
-        return pretty_str(name, endian, alignment)
+        align_str = f" @ {alignment}" if alignment != 1 else ""
+        return f"{name}{align_str}"
+
+    def __repr__(self):
+        return auto_pretty_repr(self)
+
+
+class PascalString(PrimitivePackableABC, IterPackableABC, TypeDefAlignableABC):
+    """
+    Represents a var-buffer string.
+    """
+
+    def prim_pack(self, arg: str) -> bytes:
+        encoded = arg.encode(self._encoding)
+
+        size_packed = self._size_type.prim_pack(len(encoded))
+        return size_packed.join() encoded
+
+    def unpack_prim(self, buffer: bytes) -> str:
+        return buffer.decode(encoding=self._encoding)
+
+    def iter_pack(self, *args: str) -> bytes:
+        parts = [self.prim_pack(arg) for arg in args]
+        empty = bytearray()
+        return empty.join(parts)
+
+    def iter_unpack(self, buffer: bytes, iter_count: int) -> Tuple[str, ...]:
+        size = size_of(self)
+        partials = [buffer[i * size:(i + 1) * size] for i in range(iter_count)]
+        unpacked = [self.unpack_prim(partial) for partial in partials]
+        return tuple(unpacked)
+
+    _DEFAULT_ENCODING = "ascii"
+
+    def __init__(self, size_type: IntegerDefinition, encoding: str = None, *, alignment: int = None):
+        alignment = default_if_none(alignment, 1)
+        TypeDefAlignableABC.__init__(self, alignment)
+        self._encoding = default_if_none(encoding, self._DEFAULT_ENCODING)
+        self._size_type = size_type
+
+    def __eq__(self, other):
+        if self is other:
+            return True
+        elif isinstance(other, PascalString):
+            return self.__typedef_alignment__ == other.__typedef_alignment__ and \
+                   self._encoding == other._encoding
+        else:
+            return False
+
+    def __str__(self):
+        name = f"String [{size_of(self)}] ({self._encoding})"
+        alignment = align_of(self)
+        align_str = f" @ {alignment}" if alignment != 1 else ""
+        return f"{name}{align_str}"
 
     def __repr__(self):
         return auto_pretty_repr(self)
@@ -63,18 +126,14 @@ class CStringBuffer(StringBuffer):
     Otherwise, it functions identically to StringBuffer.
     """
 
-    def unpack(self, buffer: bytes) -> str:
+    def unpack_prim(self, buffer: bytes) -> str:
         return buffer.decode(encoding=self._encoding).rstrip("\0")
 
     def __str__(self):
-        name = f"CString [{size_of(self)}] ({self._encoding})"
-        endian = endian_of(self)
-        alignment = align_of(self)
-        return pretty_str(name, endian, alignment)
+        return "C" + super(CStringBuffer, self).__str__()
 
     def __repr__(self):
         return auto_pretty_repr(self)
-
 
 # class _PascalString(SubStructLikeMixin):
 #     def __init__(self, *, size_struct: PackAndSizeLike, align_as: int = None, encoding: str = None):

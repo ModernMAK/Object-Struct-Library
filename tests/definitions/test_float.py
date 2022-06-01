@@ -1,26 +1,66 @@
-from typing import List
+from typing import List, Any
 
 import rng
-from definitions.common_tests.test_alignment import AlignmentTests
-from definitions.common_tests.test_definition import DefinitionTests
-from definitions.common_tests.test_endian import EndianTests
-from definitions.common_tests.test_primitive import PrimitiveTests, Sample2Bytes
+from definitions.common_tests import AlignmentTests, DefinitionTests, PrimitiveTests, Sample2Bytes, ByteorderTests
 from definitions.util import classproperty
-from structlib.byteorder import ByteOrder, resolve_byteorder
-from structlib.definitions import floating as _float
-from structlib.definitions.floating import _Float
-from structlib.packing.protocols import endian_as
+from structlib.byteorder import ByteOrder, resolve_byteorder, NativeEndian, BigEndian, LittleEndian, NetworkEndian
+from structlib.protocols.packing import Packable
+from structlib.protocols.typedef import TypeDefByteOrder, TypeDefAlignable
+from structlib.typedefs import floating as _float
+from structlib.typedefs.floating import FloatDefinition
 
 
 # AVOID using test as prefix
-class FloatTests(AlignmentTests, EndianTests, DefinitionTests, PrimitiveTests):
-    """
-    Represents a container for testing an _Float
-    """
+class FloatTests(AlignmentTests,  ByteorderTests, DefinitionTests, PrimitiveTests):
+    @classproperty
+    def EQUAL_DEFINITIONS(self) -> List[Any]:
+        if NativeEndian == "big":
+            return [*self.NATIVE_PACKABLE, *self.BIG_PACKABLE, *self.NETWORK_PACKABLE]
+        else:
+            return [*self.NATIVE_PACKABLE, *self.LITTLE_PACKABLE]
+
+    @classproperty
+    def INEQUAL_DEFINITIONS(self) -> List[Any]:
+        if NativeEndian == "little":
+            return [*self.BIG_PACKABLE, *self.NETWORK_PACKABLE]
+        else:
+            return self.LITTLE_PACKABLE
+
+    @classproperty
+    def NATIVE_PACKABLE(self) -> list[FloatDefinition]:
+        return [
+            FloatDefinition(self.NATIVE_SIZE * 8, byteorder=NativeEndian)
+        ]
+
+    @classproperty
+    def BIG_PACKABLE(self) -> list[FloatDefinition]:
+        return [
+            FloatDefinition(self.NATIVE_SIZE * 8, byteorder=BigEndian)
+        ]
+
+    @classproperty
+    def LITTLE_PACKABLE(self) -> list[FloatDefinition]:
+        return [
+            FloatDefinition(self.NATIVE_SIZE * 8, byteorder=LittleEndian)
+        ]
+
+    @classproperty
+    def NETWORK_PACKABLE(self) -> list[FloatDefinition]:
+        return [
+            FloatDefinition(self.NATIVE_SIZE * 8, byteorder=NetworkEndian)
+        ]
+
+    @classproperty
+    def ALIGNABLE_TYPEDEFS(self) -> List[TypeDefAlignable]:
+        return [*self.NATIVE_PACKABLE, *self.BIG_PACKABLE, *self.LITTLE_PACKABLE, *self.NETWORK_PACKABLE]
+
+    @classproperty
+    def BYTEORDER_TYPEDEFS(self) -> List[TypeDefByteOrder]:
+        return [*self.NATIVE_PACKABLE, *self.BIG_PACKABLE, *self.LITTLE_PACKABLE, *self.NETWORK_PACKABLE]
 
     @classmethod
-    def get_sample2bytes(cls, endian: ByteOrder, alignment: int) -> Sample2Bytes:
-        struct = _Float.INTERNAL_STRUCTS[(cls.NATIVE_SIZE * 8, resolve_byteorder(endian))]
+    def get_sample2bytes(cls, byteorder: ByteOrder, alignment: int) -> Sample2Bytes:
+        struct = FloatDefinition.INTERNAL_STRUCTS[(cls.NATIVE_SIZE * 8, resolve_byteorder(byteorder))]
 
         def s2b(s):
             return struct.pack(s)
@@ -50,7 +90,7 @@ class FloatTests(AlignmentTests, EndianTests, DefinitionTests, PrimitiveTests):
         seeds = self.SEEDS
         s_per_seed = s_count // len(seeds)
         byte_size = self.NATIVE_SIZE
-        byteorder = self._NATIVE
+        byteorder = NativeEndian
         r = []
         for seed in seeds:
             gen = rng.generate_floats(s_per_seed, seed, byte_size * 8, byteorder=byteorder)
@@ -66,30 +106,6 @@ class FloatTests(AlignmentTests, EndianTests, DefinitionTests, PrimitiveTests):
         # Random seed (unique per sub-test) and fixed seed
         return [hash(self.__name__), 5 * 23 * 2022]
 
-    @classproperty
-    def CLS(self) -> _Float:
-        return _Float(self.NATIVE_SIZE * 8, byteorder=self._NATIVE)
-
-    @classproperty
-    def CLS_LE(self) -> _Float:
-        return endian_as(self.CLS, self._LE)
-
-    @classproperty
-    def CLS_BE(self) -> _Float:
-        return endian_as(self.CLS, self._BE)
-
-    @classproperty
-    def INST(self) -> _Float:
-        return self.CLS()  # calling the instantiate method; not the property
-
-    @classproperty
-    def INST_LE(self) -> _Float:
-        return endian_as(self.INST, self._LE)
-
-    @classproperty
-    def INST_BE(self) -> _Float:
-        return endian_as(self.INST, self._BE)
-
 
 class TestFloat16(FloatTests):
     @classproperty
@@ -97,7 +113,7 @@ class TestFloat16(FloatTests):
         return 2
 
     @classproperty
-    def DEFINITION(self) -> _Float:
+    def DEFINITION(self) -> FloatDefinition:
         return _float.Float16
 
 
@@ -107,7 +123,7 @@ class TestFloat32(FloatTests):
         return 4
 
     @classproperty
-    def DEFINITION(self) -> _Float:
+    def DEFINITION(self) -> FloatDefinition:
         return _float.Float32
 
 
@@ -117,5 +133,5 @@ class TestFloat64(FloatTests):
         return 8
 
     @classproperty
-    def DEFINITION(self) -> _Float:
+    def DEFINITION(self) -> FloatDefinition:
         return _float.Float64

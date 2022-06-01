@@ -2,9 +2,7 @@ import warnings
 from typing import List, Any
 
 from definitions.util import classproperty
-from structlib.packing.protocols import align_of, align_as
-
-
+from structlib.protocols.typedef import align_of, align_as, TypeDefAlignable
 
 
 # AVOID using test as prefix
@@ -18,31 +16,11 @@ class AlignmentTests:
         raise NotImplementedError
 
     @classproperty
-    def CLS(self) -> Any:
-        raise NotImplementedError
-
-    @classproperty
-    def CLS_LE(self) -> Any:
-        raise NotImplementedError
-
-    @classproperty
-    def CLS_BE(self) -> Any:
-        raise NotImplementedError
-
-    @classproperty
-    def INST(self) -> Any:
-        raise NotImplementedError
-
-    @classproperty
-    def INST_LE(self) -> Any:
-        raise NotImplementedError
-
-    @classproperty
-    def INST_BE(self) -> Any:
+    def ALIGNABLE_TYPEDEFS(self) -> List[TypeDefAlignable]:
         raise NotImplementedError
 
     def test_align_as(self):
-        types = [self.CLS, self.CLS_LE, self.CLS_BE, self.INST, self.INST_LE, self.INST_BE]
+        types = self.ALIGNABLE_TYPEDEFS
         for align in self.ALIGNMENTS:
             for t in types:
                 new_t = align_as(t, align)
@@ -50,7 +28,7 @@ class AlignmentTests:
 
     def test_align_as_preserves_type(self):
         # A new types should be returned by align_as; unless alignment does not change; then the same type `should` be returned
-        types = [self.CLS, self.CLS_LE, self.CLS_BE, self.INST, self.INST_LE, self.INST_BE]
+        types = self.ALIGNABLE_TYPEDEFS
         for align in self.ALIGNMENTS:
             for t in types:
                 src_align = align_of(t)
@@ -63,7 +41,7 @@ class AlignmentTests:
                     assert new_t is not t, "`align_as` should not alter input `type-object` but a new `type-object` was NOT returned!"
 
     def test_align_as_equality(self):
-        types = [self.CLS, self.CLS_LE, self.CLS_BE, self.INST, self.INST_LE, self.INST_BE]
+        types = self.ALIGNABLE_TYPEDEFS
         for align in self.ALIGNMENTS:
             for t in types:
                 src_align = align_of(t)
@@ -72,7 +50,7 @@ class AlignmentTests:
                 assert t == redef_t, "Same alignment should preserve equality of object!"
 
     def test_align_as_inequality(self):
-        types = [self.CLS, self.CLS_LE, self.CLS_BE, self.INST, self.INST_LE, self.INST_BE]
+        types = self.ALIGNABLE_TYPEDEFS
         for align in self.ALIGNMENTS:
             for t in types:
                 src_align = align_of(t)

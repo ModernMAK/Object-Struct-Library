@@ -1,20 +1,44 @@
 from abc import ABC
-from typing import List
+from typing import List, Any
 
 import rng
 from definitions.common_tests.test_alignment import AlignmentTests
 from definitions.common_tests.test_definition import DefinitionTests
-from definitions.common_tests.test_endian import EndianTests
 from definitions.common_tests.test_primitive import PrimitiveTests, Sample2Bytes
 from definitions.util import classproperty
 from structlib.byteorder import ByteOrder
-from structlib.definitions import boolean
-from structlib.definitions.boolean import BooleanDefinition
-from structlib.packing.protocols import endian_as
+from structlib.protocols.packing import PrimitivePackable
+from structlib.protocols.typedef import TypeDefAlignable
+from structlib.typedefs import boolean
+from structlib.typedefs.boolean import BooleanDefinition
 
 
 # AVOID using test as prefix
-class BooleanTests(AlignmentTests, EndianTests, DefinitionTests, PrimitiveTests, ABC):
+class BooleanTests(AlignmentTests, DefinitionTests, PrimitiveTests):
+    @classproperty
+    def EQUAL_DEFINITIONS(self) -> List[Any]:
+        return [BooleanDefinition()]
+
+    @classproperty
+    def INEQUAL_DEFINITIONS(self) -> List[Any]:
+        return [BooleanDefinition(alignment=2)]
+
+    @classproperty
+    def NATIVE_PACKABLE(self) -> List[PrimitivePackable]:
+        return [BooleanDefinition()]
+
+    @classproperty
+    def BIG_PACKABLE(self) -> List[PrimitivePackable]:
+        return []
+
+    @classproperty
+    def LITTLE_PACKABLE(self) -> List[PrimitivePackable]:
+        return []
+
+    @classproperty
+    def NETWORK_PACKABLE(self) -> List[PrimitivePackable]:
+        return []
+
     @classproperty
     def OFFSETS(self) -> List[int]:
         return [0, 1, 2, 4, 8]  # Normal power sequence
@@ -22,6 +46,10 @@ class BooleanTests(AlignmentTests, EndianTests, DefinitionTests, PrimitiveTests,
     @classproperty
     def ALIGNMENTS(self) -> List[int]:
         return [1, 2, 4, 8]  # 0 not acceptable alignment
+
+    @classproperty
+    def ALIGNABLE_TYPEDEFS(self) -> List[TypeDefAlignable]:
+        return [BooleanDefinition()]
 
     @classproperty
     def ORIGINS(self) -> List[int]:
@@ -62,29 +90,6 @@ class BooleanTests(AlignmentTests, EndianTests, DefinitionTests, PrimitiveTests,
             return bytes([0x01 if b else 0x00])
         return s2b
 
-    @classproperty
-    def CLS(self) -> BooleanDefinition:
-        return BooleanDefinition(endian=self._NATIVE)
-
-    @classproperty
-    def CLS_LE(self) -> BooleanDefinition:
-        return endian_as(self.CLS, self._LE)
-
-    @classproperty
-    def CLS_BE(self) -> BooleanDefinition:
-        return endian_as(self.CLS, self._BE)
-
-    @classproperty
-    def INST(self) -> BooleanDefinition:
-        return self.CLS()  # calling the instantiate method; not the property
-
-    @classproperty
-    def INST_LE(self) -> BooleanDefinition:
-        return endian_as(self.INST, self._LE)
-
-    @classproperty
-    def INST_BE(self) -> BooleanDefinition:
-        return endian_as(self.INST, self._BE)
 
 
 class TestBoolean(BooleanTests):
