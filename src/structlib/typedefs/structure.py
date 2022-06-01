@@ -24,16 +24,16 @@ def _max_align_of(*types: TypeDefAlignable):
 
 def _combined_size(*types: TypeDefSizableAndAlignable):
     size = 0
-    max_align = 0
+    max_align = 1
     for t in types:
         t_align = align_of(t)
-        max_align = max(max_align,t_align)
+        max_align = max(max_align, t_align)
         t_prefix_pad = calculate_padding(t_align, size)
         t_native_size = native_size_of(t)
-        t_postfix_pad = calculate_padding(t_align,t_native_size)
+        t_postfix_pad = calculate_padding(t_align, t_native_size)
         size += t_prefix_pad + t_native_size + t_postfix_pad
 
-    pad_to_max = calculate_padding(max_align,size)
+    pad_to_max = calculate_padding(max_align, size)
     size += pad_to_max
     return size
 
@@ -83,9 +83,8 @@ class Struct(StructPackableABC, TypeDefSizableABC, TypeDefAlignableABC):
     def __eq__(self, other):
         if self is other:
             return True
-        elif isinstance(other,Struct):
+        elif isinstance(other, Struct):
             return self._fixed_size == other._fixed_size and \
                    self.__typedef_alignment__ == other.__typedef_alignment__ and \
                    self.__typedef_native_size__ == other.__typedef_native_size__ and \
                    self._types == other._types
-

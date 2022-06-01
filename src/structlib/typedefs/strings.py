@@ -66,57 +66,57 @@ class StringBuffer(PrimitivePackableABC, IterPackableABC, TypeDefSizableABC, Typ
     def __repr__(self):
         return auto_pretty_repr(self)
 
-
-class PascalString(PrimitivePackableABC, IterPackableABC, TypeDefAlignableABC):
-    """
-    Represents a var-buffer string.
-    """
-
-    def prim_pack(self, arg: str) -> bytes:
-        encoded = arg.encode(self._encoding)
-
-        size_packed = self._size_type.prim_pack(len(encoded))
-        return size_packed.join() encoded
-
-    def unpack_prim(self, buffer: bytes) -> str:
-        return buffer.decode(encoding=self._encoding)
-
-    def iter_pack(self, *args: str) -> bytes:
-        parts = [self.prim_pack(arg) for arg in args]
-        empty = bytearray()
-        return empty.join(parts)
-
-    def iter_unpack(self, buffer: bytes, iter_count: int) -> Tuple[str, ...]:
-        size = size_of(self)
-        partials = [buffer[i * size:(i + 1) * size] for i in range(iter_count)]
-        unpacked = [self.unpack_prim(partial) for partial in partials]
-        return tuple(unpacked)
-
-    _DEFAULT_ENCODING = "ascii"
-
-    def __init__(self, size_type: IntegerDefinition, encoding: str = None, *, alignment: int = None):
-        alignment = default_if_none(alignment, 1)
-        TypeDefAlignableABC.__init__(self, alignment)
-        self._encoding = default_if_none(encoding, self._DEFAULT_ENCODING)
-        self._size_type = size_type
-
-    def __eq__(self, other):
-        if self is other:
-            return True
-        elif isinstance(other, PascalString):
-            return self.__typedef_alignment__ == other.__typedef_alignment__ and \
-                   self._encoding == other._encoding
-        else:
-            return False
-
-    def __str__(self):
-        name = f"String [{size_of(self)}] ({self._encoding})"
-        alignment = align_of(self)
-        align_str = f" @ {alignment}" if alignment != 1 else ""
-        return f"{name}{align_str}"
-
-    def __repr__(self):
-        return auto_pretty_repr(self)
+#
+# class PascalString(PrimitivePackableABC, IterPackableABC, TypeDefAlignableABC):
+#     """
+#     Represents a var-buffer string.
+#     """
+#
+#     def prim_pack(self, arg: str) -> bytes:
+#         encoded = arg.encode(self._encoding)
+#
+#         size_packed = self._size_type.prim_pack(len(encoded))
+#         return size_packed.join() encoded
+#
+#     def unpack_prim(self, buffer: bytes) -> str:
+#         return buffer.decode(encoding=self._encoding)
+#
+#     def iter_pack(self, *args: str) -> bytes:
+#         parts = [self.prim_pack(arg) for arg in args]
+#         empty = bytearray()
+#         return empty.join(parts)
+#
+#     def iter_unpack(self, buffer: bytes, iter_count: int) -> Tuple[str, ...]:
+#         size = size_of(self)
+#         partials = [buffer[i * size:(i + 1) * size] for i in range(iter_count)]
+#         unpacked = [self.unpack_prim(partial) for partial in partials]
+#         return tuple(unpacked)
+#
+#     _DEFAULT_ENCODING = "ascii"
+#
+#     def __init__(self, size_type: IntegerDefinition, encoding: str = None, *, alignment: int = None):
+#         alignment = default_if_none(alignment, 1)
+#         TypeDefAlignableABC.__init__(self, alignment)
+#         self._encoding = default_if_none(encoding, self._DEFAULT_ENCODING)
+#         self._size_type = size_type
+#
+#     def __eq__(self, other):
+#         if self is other:
+#             return True
+#         elif isinstance(other, PascalString):
+#             return self.__typedef_alignment__ == other.__typedef_alignment__ and \
+#                    self._encoding == other._encoding
+#         else:
+#             return False
+#
+#     def __str__(self):
+#         name = f"String [{size_of(self)}] ({self._encoding})"
+#         alignment = align_of(self)
+#         align_str = f" @ {alignment}" if alignment != 1 else ""
+#         return f"{name}{align_str}"
+#
+#     def __repr__(self):
+#         return auto_pretty_repr(self)
 
 
 class CStringBuffer(StringBuffer):

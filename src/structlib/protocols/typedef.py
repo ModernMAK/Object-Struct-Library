@@ -11,7 +11,7 @@ T = TypeVar("T")
 
 @runtime_checkable
 class TypeDefSizable(Protocol):
-    __typedef_native_size__: ClassVar[int]
+    __typedef_native_size__: int
 
 
 def native_size_of(typedef: TypeDefSizable):
@@ -20,7 +20,7 @@ def native_size_of(typedef: TypeDefSizable):
 
 @runtime_checkable
 class TypeDefAlignable(Protocol):
-    __typedef_alignment__: ClassVar[int]
+    __typedef_alignment__: int
 
     @abstractmethod
     def __typedef_align_as__(self: T, alignment: int) -> T:

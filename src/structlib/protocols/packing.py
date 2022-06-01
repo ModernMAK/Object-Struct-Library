@@ -35,7 +35,7 @@ class Packable(Protocol):
 @runtime_checkable
 class IterPackable(Protocol):
     @abstractmethod
-    def iter_pack(self, *args: Tuple[Any, ...]) -> bytes:
+    def iter_pack(self, *args: Any) -> bytes:
         raise PrettyNotImplementedError(self, self.iter_pack)
 
     @abstractmethod

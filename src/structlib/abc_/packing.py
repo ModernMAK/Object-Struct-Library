@@ -1,10 +1,8 @@
 from abc import ABC
 from typing import Tuple, BinaryIO, Any
-
-from structlib.errors import ArgCountError, pretty_func_name
 from structlib.io import bufferio, streamio
-from structlib.protocols.packing import Packable, IterPackable, StructPackable, PrimitivePackable, TPrim, EXP_PRIM_ARGS
-from structlib.protocols.typedef import align_of, size_of, TypeDefAlignable, TypeDefSizable
+from structlib.protocols.packing import Packable, IterPackable, StructPackable, PrimitivePackable, TPrim, DataclassPackable, DClassType, DClass
+from structlib.protocols.typedef import align_of, size_of, TypeDefAlignable, TypeDefSizable, T
 from structlib.typing_ import WritableBuffer, ReadableBuffer, ReadableStream, WritableStream
 
 
@@ -128,20 +126,33 @@ class PrimitivePackableABC(PrimitivePackable, TypeDefSizable, TypeDefAlignable, 
         return read, unpacked
 
 
-# class PackablePrimitiveAdapterABC(PackableABC, PrimitivePackableABC, ABC):
-#     def pack(self, *args: TPrim):
-#         arg_count = len(args)
-#         if arg_count != EXP_PRIM_ARGS:
-#             raise ArgCountError(pretty_func_name(self, self.prim_pack), arg_count, EXP_PRIM_ARGS)
-#         return self.prim_pack(args[0])
-#
-#     def unpack(self, buffer: bytes) -> TPrim:
-#         return self.unpack_prim(buffer)
-#
-#
-# class PackableStructAdapterABC(PackableABC, StructPackableABC, ABC):
-#     def pack(self, *args: Any):
-#         return self.struct_pack(*args)
-#
-#     def unpack(self, buffer: bytes) -> Tuple[Any]:
-#         return self.struct_unpack(buffer)
+class DataclassPackableABC(DataclassPackable, TypeDefSizable, TypeDefAlignable, ABC):
+    """
+    A Packable which uses pack/unpack to perform buffer/stream operations.
+    """
+
+    def dclass_pack_buffer(self, buffer: WritableBuffer, *, offset: int = 0, origin: int = 0) -> int:
+        packed = self.dclass_pack()
+        alignment = align_of(self)
+        return bufferio.write(buffer, packed, alignment, offset, origin)
+
+    @classmethod
+    def dclass_unpack_buffer(cls: DClassType, buffer: ReadableBuffer, *, offset: int = 0, origin: int = 0) -> Tuple[int, DClass]:
+        size = size_of(cls)
+        alignment = align_of(cls)
+        read, packed = bufferio.read(buffer, size, alignment, offset, origin)
+        unpacked = cls.dclass_unpack(packed)
+        return read, unpacked
+
+    def dclass_pack_stream(self, stream: WritableStream, *, origin: int = 0) -> int:
+        packed = self.dclass_pack()
+        alignment = align_of(self)
+        return streamio.write(stream, packed, alignment, origin)
+
+    @classmethod
+    def dclass_unpack_stream(cls: DClassType, stream: ReadableStream, *, origin: int = 0) -> Tuple[int, DClass]:
+        size = size_of(cls)
+        alignment = align_of(cls)
+        read, packed = streamio.read(stream, size, alignment, origin)
+        unpacked = cls.dclass_unpack(packed)
+        return read, unpacked

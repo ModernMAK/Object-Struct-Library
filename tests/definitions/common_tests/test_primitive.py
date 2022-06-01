@@ -320,7 +320,7 @@ class PrimitiveTests:
 
                 for align in self.ALIGNMENTS:
                     for typedefs in typedef_groups:
-                        aligned_typedefs = align_as_many(*typedefs,align=align)
+                        aligned_typedefs = align_as_many(*typedefs, align=align)
                         for i in range(len(aligned_typedefs) - 1):  # We don't need to do an N*N comparisons; if each is equal to the previous, they are all equal by induciton
                             left, right = aligned_typedefs[i], aligned_typedefs[i + 1]
                             assert_buffer_pack_equality(left, right, get_buf, samples, align, offset, origin)
@@ -341,7 +341,7 @@ class PrimitiveTests:
                 for align in self.ALIGNMENTS:
                     aligned_s2bs = self.get_all_sample2bytes(align)
                     for typedefs, s2b in zip(typedef_groups, aligned_s2bs):
-                        aligned_typedefs = align_as_many(*typedefs,align=align)
+                        aligned_typedefs = align_as_many(*typedefs, align=align)
                         for i in range(len(aligned_typedefs) - 1):  # We don't need to do an N*N comparisons; if each is equal to the previous, they are all equal by induciton
                             left, right = aligned_typedefs[i], aligned_typedefs[i + 1]
                             assert_buffer_unpack_equality(left, right, get_buf, s2b, samples, align, offset, origin)
@@ -399,7 +399,7 @@ class PrimitiveTests:
 
                 for align in self.ALIGNMENTS:
                     for typedefs in typedef_groups:
-                        aligned_typedefs = align_as_many(*typedefs,align=align)
+                        aligned_typedefs = align_as_many(*typedefs, align=align)
                         for i in range(len(aligned_typedefs) - 1):  # We don't need to do an N*N comparisons; if each is equal to the previous, they are all equal by induciton
                             left, right = aligned_typedefs[i], aligned_typedefs[i + 1]
                             assert_stream_pack_equality(left, right, get_buf, samples, align, offset, origin)
@@ -420,7 +420,7 @@ class PrimitiveTests:
                 for align in self.ALIGNMENTS:
                     aligned_s2bs = self.get_all_sample2bytes(align)
                     for typedefs, s2b in zip(typedef_groups, aligned_s2bs):
-                        aligned_typedefs = align_as_many(*typedefs,align=align)
+                        aligned_typedefs = align_as_many(*typedefs, align=align)
                         for i in range(len(aligned_typedefs) - 1):  # We don't need to do an N*N comparisons; if each is equal to the previous, they are all equal by induciton
                             left, right = aligned_typedefs[i], aligned_typedefs[i + 1]
                             assert_stream_unpack_equality(left, right, get_buf, s2b, samples, align, offset, origin)
