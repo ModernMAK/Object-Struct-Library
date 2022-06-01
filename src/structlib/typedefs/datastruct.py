@@ -15,6 +15,7 @@ from structlib.typedefs.structure import Struct
 
 T = TypeVar("T")
 
+
 @runtime_checkable
 class TypeDefDataclass(Protocol):
     __typedef_dclass_struct_packable__: StructPackable
@@ -104,7 +105,6 @@ class TypeDefDataclassMetaclass(_ProtocolMeta, ABCMeta, type):
         def __prepare__(cls, name, bases):
             return OrderedDict()
 
-    @staticmethod
     def dclass_align_as(cls: T, alignment: int) -> T:
         if cls.__typedef_alignment__ == alignment:
             return cls
@@ -112,20 +112,16 @@ class TypeDefDataclassMetaclass(_ProtocolMeta, ABCMeta, type):
             new_cls = type(cls.__name__, cls.__bases__, dict(cls.__dict__), alignment=alignment)
             return new_cls
 
-    @staticmethod
     def dclass_redefine(cls: T, annotations: Dict) -> T:
         _dict = dict(cls.__dict__)
         _dict["__annotations__"] = annotations
         new_cls = type(cls.__name__, cls.__bases__, _dict, alignment=align_of(cls))
         return new_cls
 
-
-
-    @staticmethod
-    def dclass_str(self:TypeDefDataclass) -> str:
+    def dclass_str(self: TypeDefDataclass) -> str:
         names = self.__typedef_dclass_name_order__
         cls_name = self.__class__.__name__
-        pairs = [f"{name}={getattr(self,name)}" for name in names]
+        pairs = [f"{name}={getattr(self, name)}" for name in names]
         return f"{cls_name}({', '.join(pairs)})"
 
     def __new__(mcs, name: str, bases: tuple[type, ...], attrs: Dict[str, Any], alignment: int = None):
@@ -137,10 +133,10 @@ class TypeDefDataclassMetaclass(_ProtocolMeta, ABCMeta, type):
         if "__repr__" not in attrs:
             attrs["__repr__"] = mcs.dclass_str
 
-        attrs["__typedef_align_as__"] = mcs.dclass_align_as
+        attrs["__typedef_align_as__"] = classmethod(mcs.dclass_align_as)
         attrs["__typedef_alignment__"] = classproperty(lambda self: align_of(self.__typedef_dclass_struct_packable__))
 
-        attrs["__typedef_dclass_redefine__"] = mcs.dclass_redefine
+        attrs["__typedef_dclass_redefine__"] = classmethod(mcs.dclass_redefine)
         type_hints = resolve_annotations(attrs.get("__annotations__", {}), attrs.get("__module__"))
         typed_attr = {name: typing for name, typing in type_hints.items()}
         ordered_attr = [name for name in type_hints.keys() if name in typed_attr]
@@ -259,4 +255,4 @@ class DataStruct(TypeDefDataclassABC):
 def redefine_datastruct(datastruct: T, annotations_: Dict[str, Any]) -> T:
     if TYPE_CHECKING:
         datastruct: Type[TypeDefDataclass]
-    return datastruct.__typedef_dclass_redefine__(datastruct,annotations_)
+    return datastruct.__typedef_dclass_redefine__(annotations_)
