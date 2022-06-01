@@ -5,7 +5,7 @@ from structlib.abc_.packing import PrimitivePackableABC, IterPackableABC
 from structlib.byteorder import ByteOrder
 from structlib.protocols.packing import iter_pack, pack_buffer, iter_unpack, unpack_buffer
 from structlib.protocols.typedef import TypeDefSizable, TypeDefAlignable, TypeDefByteOrder, byteorder_as, size_of, align_as
-from structlib.utils import auto_pretty_repr
+from structlib.utils import auto_pretty_repr, pretty_repr
 
 AnyPackableTypeDef = Any  # TODO
 
@@ -43,6 +43,15 @@ class FixedCollection(PrimitivePackableABC, IterPackableABC, TypeDefSizable, Typ
         self._backing = data_type
         self._args = args
 
+    @classmethod
+    def Unsized(cls, data_type: Union[Type[AnyPackableTypeDef], AnyPackableTypeDef]) -> object:
+        """
+        Helper, returns an 'unsized' Array which should be 
+        :param data_type: 
+        :return: 
+        """
+        return cls(0,data_type)
+
     def __eq__(self, other):
         if self is other:
             return True
@@ -56,7 +65,9 @@ class FixedCollection(PrimitivePackableABC, IterPackableABC, TypeDefSizable, Typ
         return f"Array[{self._args}] of `{self._backing}`"
 
     def __repr__(self):
-        return auto_pretty_repr(self)
+        repr = super().__repr__()
+        msg = str(self)
+        return pretty_repr(repr, msg)
 
     def prim_pack(self, args: List) -> bytes:
         try:

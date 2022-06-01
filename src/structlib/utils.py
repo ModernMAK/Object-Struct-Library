@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, Optional, OrderedDict, Dict, Union
 
 from structlib.byteorder import ByteOrder
 from structlib.typing_ import ReadableBuffer
@@ -63,3 +63,8 @@ class ClassProperty(object):
 
 
 classproperty = ClassProperty  # Alias for decorator
+
+
+def dataclass_str_format(cls_name: str, attrs: Union[OrderedDict[str, Any],Dict[str,Any]]):
+    pairs = [f"{name}={value}" for name, value in attrs.items()]
+    return f"{cls_name}({', '.join(pairs)})"
