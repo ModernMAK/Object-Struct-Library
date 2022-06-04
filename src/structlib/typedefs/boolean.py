@@ -7,7 +7,7 @@ from structlib.utils import default_if_none, auto_pretty_repr
 
 
 class BooleanDefinition(PrimitivePackableABC, IterPackableABC, TypeDefSizableABC, TypeDefAlignableABC):
-    NATIVE_SIZE = 1  # Boolean's are always 1 byte
+    NATIVE_SIZE = 1  # Booleans are always 1 byte
 
     TRUE = 0x01
     TRUE_BUF = bytes([TRUE])

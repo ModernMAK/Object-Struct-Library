@@ -4,7 +4,7 @@ from typing import List, Union, Type, Any, Tuple
 from structlib.abc_.packing import PrimitivePackableABC, IterPackableABC
 from structlib.byteorder import ByteOrder
 from structlib.protocols.packing import iter_pack, pack_buffer, iter_unpack, unpack_buffer
-from structlib.protocols.typedef import TypeDefSizable, TypeDefAlignable, TypeDefByteOrder, byteorder_as, size_of, align_as
+from structlib.protocols.typedef import TypeDefSizable, TypeDefAlignable, TypeDefByteOrder, byteorder_as, size_of, align_as, T
 from structlib.utils import auto_pretty_repr, pretty_repr
 
 AnyPackableTypeDef = Any  # TODO
@@ -44,9 +44,9 @@ class FixedCollection(PrimitivePackableABC, IterPackableABC, TypeDefSizable, Typ
         self._args = args
 
     @classmethod
-    def Unsized(cls, data_type: Union[Type[AnyPackableTypeDef], AnyPackableTypeDef]) -> object:
+    def Unsized(cls:T, data_type: Union[Type[AnyPackableTypeDef], AnyPackableTypeDef]) -> T:
         """
-        Helper, returns an 'unsized' Array which should be 
+        Helper, returns an 'unsized' Array
         :param data_type: 
         :return: 
         """
@@ -107,7 +107,7 @@ class FixedCollection(PrimitivePackableABC, IterPackableABC, TypeDefSizable, Typ
 class Array(FixedCollection):
     ...
 
-# Its too annoying when using typing.Tuple
+# It's too annoying when using typing.Tuple
 # class Tuple(FixedCollection):
 #     def unpack(self, buffer: bytes) -> _Tuple:
 #         return tuple(super().unpack(buffer))

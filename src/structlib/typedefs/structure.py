@@ -73,9 +73,11 @@ class Struct(StructPackableABC, TypeDefSizableABC, TypeDefAlignableABC):
                 size = _combined_size(*types)
                 TypeDefSizableABC.__init__(self, size)
             except:  # TODO narrow exception
-                delattr(self, "__typedef_native_size__")
+                # delattr(self, "__typedef_native_size__")
+                ...
         else:
-            delattr(self, "__typedef_native_size__")
+            ...
+            # delattr(self, "__typedef_native_size__")
 
         TypeDefAlignableABC.__init__(self, alignment)
         self._types = types
