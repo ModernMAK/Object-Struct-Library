@@ -2,10 +2,10 @@ from abc import ABC
 from typing import List, Any, Tuple
 
 import rng
-from definitions.common_tests import AlignmentTests
-from definitions.common_tests.test_packable import Sample2Bytes
-from definitions.common_tests.test_struct import StructureTests
-from definitions.util import classproperty
+from typedefs.common_tests import AlignmentTests
+from typedefs.common_tests.test_packable import Sample2Bytes
+from typedefs.common_tests.test_struct import StructureTests
+from typedefs.util import classproperty
 from structlib.byteorder import ByteOrder, NativeEndian
 from structlib.protocols.packing import Packable
 from structlib.protocols.typedef import TypeDefAlignable, native_size_of, align_of

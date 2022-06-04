@@ -2,10 +2,10 @@ from abc import ABC
 from typing import List, Literal, Any
 
 import rng
-from definitions.common_tests.test_alignment import AlignmentTests
-from definitions.common_tests.test_definition import DefinitionTests
-from definitions.common_tests.test_byteorder import ByteorderTests, classproperty
-from definitions.common_tests.test_primitive import PrimitiveTests, Sample2Bytes
+from typedefs.common_tests.test_alignment import AlignmentTests
+from typedefs.common_tests.test_definition import DefinitionTests
+from typedefs.common_tests.test_byteorder import ByteorderTests, classproperty
+from typedefs.common_tests.test_primitive import PrimitiveTests, Sample2Bytes
 from structlib.byteorder import ByteOrder, resolve_byteorder, NativeEndian, BigEndian, LittleEndian, NetworkEndian
 from structlib.protocols.packing import PrimitivePackable
 from structlib.protocols.typedef import TypeDefAlignable, align_of, native_size_of, byteorder_of, TypeDefByteOrder, byteorder_as, calculate_padding

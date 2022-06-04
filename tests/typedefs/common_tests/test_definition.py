@@ -1,7 +1,7 @@
 import warnings
 from typing import Any, List
 
-from definitions.util import classproperty
+from typedefs.util import classproperty
 
 
 # AVOID using test as prefix

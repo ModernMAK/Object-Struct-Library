@@ -1,10 +1,12 @@
 import math
+import sys
 from io import BytesIO
 from typing import List, Any, Callable
+from typing import Literal
 
-from definitions.util import classproperty
-from structlib.byteorder import ByteOrder, NativeEndian, NetworkEndian, LittleEndian, BigEndian
-from structlib.protocols.packing import Packable
+from typedefs.util import classproperty
+from structlib.byteorder import ByteOrder, NativeEndian, BigEndian, LittleEndian, NetworkEndian
+from structlib.protocols.packing import PrimitivePackable
 from structlib.protocols.typedef import align_as, calculate_padding
 
 
@@ -51,93 +53,96 @@ def sample2buffer(s: Any, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes
     return buffer
 
 
-def assert_pack(t: Packable, sample2bytes: Sample2Bytes, samples: List[Any]):
+def assert_pack(t: PrimitivePackable, sample2bytes: Sample2Bytes, samples: List[Any]):
     for sample in samples:
         buffer = sample2bytes(sample)
-        packed = t.pack(sample)
-        assert packed == buffer
+        packed = t.prim_pack(sample)
+        assert len(buffer) == len(packed)
+        assert buffer == packed
 
 
-def assert_unpack(t: Packable, sample2bytes: Sample2Bytes, samples: List[Any]):
+def assert_unpack(t: PrimitivePackable, sample2bytes: Sample2Bytes, samples: List[Any]):
     for sample in samples:
         buffer = sample2bytes(sample)
-        unpacked = t.unpack(buffer)
-        assert unpacked == sample or NAN_CHECK(sample, unpacked)
+        unpacked = t.unpack_prim(buffer)
+        assert sample == unpacked or NAN_CHECK(sample, unpacked)
 
 
-def assert_pack_equality(left: Packable, right: Packable, samples: List[Any]):
+def assert_pack_equality(left: PrimitivePackable, right: PrimitivePackable, samples: List[Any]):
     for sample in samples:
-        l_packed, r_packed = left.pack(sample), right.pack(sample)
+        l_packed, r_packed = left.prim_pack(sample), right.prim_pack(sample)
         assert l_packed == r_packed
 
 
-def assert_unpack_equality(left: Packable, right: Packable, sample2bytes: Sample2Bytes, samples: List[Any]):
+def assert_unpack_equality(left: PrimitivePackable, right: PrimitivePackable, sample2bytes: Sample2Bytes, samples: List[Any]):
     for sample in samples:
         buffer = sample2bytes(sample)
-        l_unpacked, r_unpacked = left.unpack(buffer), right.unpack(buffer)
+        l_unpacked, r_unpacked = left.unpack_prim(buffer), right.unpack_prim(buffer)
         assert l_unpacked == r_unpacked or NAN_CHECK(l_unpacked, r_unpacked)
 
 
-def assert_buffer_pack(t: Packable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
+def assert_buffer_pack(t: PrimitivePackable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
     for sample in samples:
         buffer = get_buffer(alignment, offset, origin)
         expected = sample2buffer(sample, get_buffer, sample2bytes, alignment, offset, origin)
-        written = t.pack_buffer(buffer, sample, offset=offset, origin=origin)
+        written = t.prim_pack_buffer(buffer, sample, offset=offset, origin=origin)
+        assert len(expected) == len(buffer)
         assert expected == buffer
 
 
-def assert_buffer_unpack(t: Packable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
+def assert_buffer_unpack(t: PrimitivePackable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
     for sample in samples:
         buffer = sample2buffer(sample, get_buffer, sample2bytes, alignment, offset, origin)
-        read, unpacked = t.unpack_buffer(buffer, offset=offset, origin=origin)
-        assert unpacked == sample or NAN_CHECK(sample, unpacked), f"Sample: `{sample}`, Align: `{alignment}`, Offset: `{offset}`, Origin: `{origin}`"
+        read, unpacked = t.unpack_prim_buffer(buffer, offset=offset, origin=origin)
+        assert sample == unpacked or NAN_CHECK(sample, unpacked)
 
 
-def assert_buffer_pack_equality(left: Packable, right: Packable, get_buffer: GetEmptyBuffer, samples: List[Any], alignment: int, offset: int, origin: int):
+def assert_buffer_pack_equality(left: PrimitivePackable, right: PrimitivePackable, get_buffer: GetEmptyBuffer, samples: List[Any], alignment: int, offset: int, origin: int):
     for sample in samples:
         l_empty, r_empty = get_buffer(alignment, offset, origin), get_buffer(alignment, offset, origin)
-        l_written, r_written = left.pack_buffer(l_empty, sample, offset=offset, origin=origin), right.pack_buffer(r_empty, sample, offset=offset, origin=origin)
+        l_written, r_written = left.prim_pack_buffer(l_empty, sample, offset=offset, origin=origin), right.prim_pack_buffer(r_empty, sample, offset=offset, origin=origin)
         assert l_empty == r_empty
         assert l_written == r_written
 
 
-def assert_buffer_unpack_equality(left: Packable, right: Packable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
+def assert_buffer_unpack_equality(left: PrimitivePackable, right: PrimitivePackable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
     for sample in samples:
         buffer = sample2buffer(sample, get_buffer, sample2bytes, alignment, offset, origin)
-        (l_read, l_unpacked), (r_read, r_unpacked) = left.unpack_buffer(buffer, offset=offset, origin=origin), right.unpack_buffer(buffer, offset=offset, origin=origin)
+        (l_read, l_unpacked), (r_read, r_unpacked) = left.unpack_prim_buffer(buffer, offset=offset, origin=origin), right.unpack_prim_buffer(buffer, offset=offset, origin=origin)
         assert l_read == r_read
         assert l_unpacked == r_unpacked or NAN_CHECK(l_unpacked, r_unpacked)
 
 
-def assert_stream_pack(t: Packable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
+def assert_stream_pack(t: PrimitivePackable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
     for sample in samples:
         empty = get_buffer(alignment, offset, origin)
         expected = sample2buffer(sample, get_buffer, sample2bytes, alignment, offset, origin)
         with BytesIO(empty) as stream:
             stream.seek(origin + offset)
-            written = t.pack_stream(stream, sample, origin=origin)
+            written = t.prim_pack_stream(stream, sample, origin=origin)
             stream.seek(0)
             buffer = stream.read()
+            assert len(expected) == len(buffer)
             assert expected == buffer
 
 
-def assert_stream_unpack(t: Packable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
+def assert_stream_unpack(t: PrimitivePackable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
     for sample in samples:
         buffer = sample2buffer(sample, get_buffer, sample2bytes, alignment, offset, origin)
         with BytesIO(buffer) as stream:
             stream.seek(origin + offset)
-            read, unpacked = t.unpack_stream(stream, origin=origin)
-            assert unpacked == sample or NAN_CHECK(sample, unpacked)
+            read, unpacked = t.unpack_prim_stream(stream, origin=origin)
+            assert sample == unpacked or NAN_CHECK(sample, unpacked)
 
 
-def assert_stream_pack_equality(left: Packable, right: Packable, get_buffer: GetEmptyBuffer, samples: List[Any], alignment: int, offset: int, origin: int):
+def assert_stream_pack_equality(left: PrimitivePackable, right: PrimitivePackable, get_buffer: GetEmptyBuffer, samples: List[Any], alignment: int, offset: int, origin: int):
     for sample in samples:
         l_empty, r_empty = get_buffer(alignment, offset, origin), get_buffer(alignment, offset, origin)
         with BytesIO(l_empty) as l_stream:
             with BytesIO(r_empty) as r_stream:
                 l_stream.seek(origin + offset)
                 r_stream.seek(origin + offset)
-                l_written, r_written = left.pack_stream(l_stream, sample, origin=origin), right.pack_stream(r_stream, sample, origin=origin)
+                l_written, r_written = left.prim_pack_stream(l_stream, sample, origin=origin), right.prim_pack_stream(r_stream, sample, origin=origin)
 
                 l_stream.seek(0)
                 r_stream.seek(0)
@@ -148,7 +153,7 @@ def assert_stream_pack_equality(left: Packable, right: Packable, get_buffer: Get
                 assert l_packed == r_packed
 
 
-def assert_stream_unpack_equality(left: Packable, right: Packable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
+def assert_stream_unpack_equality(left: PrimitivePackable, right: PrimitivePackable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
     for sample in samples:
         buffer = sample2buffer(sample, get_buffer, sample2bytes, alignment, offset, origin)
         with BytesIO(buffer) as l_stream:
@@ -156,14 +161,13 @@ def assert_stream_unpack_equality(left: Packable, right: Packable, get_buffer: G
                 l_stream.seek(origin + offset)
                 r_stream.seek(origin + offset)
 
-                (l_read, l_unpacked), (r_read, r_unpacked) = left.unpack_stream(l_stream, origin=origin), right.unpack_stream(r_stream, origin=origin)
+                (l_read, l_unpacked), (r_read, r_unpacked) = left.unpack_prim_stream(l_stream, origin=origin), right.unpack_prim_stream(r_stream, origin=origin)
 
                 assert l_read == r_read
                 assert l_unpacked == r_unpacked or NAN_CHECK(l_unpacked, r_unpacked)
 
 
-# AVOID using test as prefix
-class PackableTests:
+class PrimitiveTests:
 
     @classproperty
     def OFFSETS(self) -> List[int]:
@@ -190,19 +194,19 @@ class PackableTests:
         raise NotImplementedError
 
     @classproperty
-    def NATIVE_PACKABLE(self) -> List[Packable]:
+    def NATIVE_PACKABLE(self) -> List[PrimitivePackable]:
         raise NotImplementedError
 
     @classproperty
-    def BIG_PACKABLE(self) -> List[Packable]:
+    def BIG_PACKABLE(self) -> List[PrimitivePackable]:
         raise NotImplementedError
 
     @classproperty
-    def LITTLE_PACKABLE(self) -> List[Packable]:
+    def LITTLE_PACKABLE(self) -> List[PrimitivePackable]:
         raise NotImplementedError
 
     @classproperty
-    def NETWORK_PACKABLE(self) -> List[Packable]:
+    def NETWORK_PACKABLE(self) -> List[PrimitivePackable]:
         raise NotImplementedError
 
     @classmethod
@@ -228,7 +232,7 @@ class PackableTests:
     def get_all_typdef_groups(self):
         return [self.NATIVE_PACKABLE, self.BIG_PACKABLE, self.LITTLE_PACKABLE, self.NETWORK_PACKABLE]
 
-    def test_pack(self):
+    def test_primitive_pack(self):
         samples = self.SAMPLES
         s2bs = self.get_all_sample2bytes(self.ALIGN)
         typedef_groups = self.get_all_typdef_groups()
@@ -237,7 +241,7 @@ class PackableTests:
             for typedef in typedefs:
                 assert_pack(typedef, s2b, samples)
 
-    def test_unpack(self):
+    def test_primitive_unpack(self):
         samples = self.SAMPLES
         s2bs = self.get_all_sample2bytes(self.ALIGN)
         typedef_groups = self.get_all_typdef_groups()
@@ -246,24 +250,24 @@ class PackableTests:
             for typedef in typedefs:
                 assert_unpack(typedef, s2b, samples)
 
-    def test_pack_equality(self):
+    def test_primitive_pack_equality(self):
         samples = self.SAMPLES
         typedef_groups = self.get_all_typdef_groups()
         for typedefs in typedef_groups:
-            for i in range(len(typedefs) - 1):  # We don't need to do an N*N comparisons; if each is equal to the previous, they are all equal by induction
+            for i in range(len(typedefs) - 1):  # We don't need to do an N*N comparisons; if each is equal to the previous, they are all equal by induciton
                 left, right = typedefs[i], typedefs[i + 1]
                 assert_pack_equality(left, right, samples)
 
-    def test_unpack_equality(self):
+    def test_primitive_unpack_equality(self):
         samples = self.SAMPLES
         typedef_groups = self.get_all_typdef_groups()
         s2bs = self.get_all_sample2bytes(self.ALIGN)
         for typedefs, s2b in zip(typedef_groups, s2bs):
-            for i in range(len(typedefs) - 1):  # We don't need to do an N*N comparisons; if each is equal to the previous, they are all equal by induction
+            for i in range(len(typedefs) - 1):  # We don't need to do an N*N comparisons; if each is equal to the previous, they are all equal by induciton
                 left, right = typedefs[i], typedefs[i + 1]
                 assert_unpack_equality(left, right, s2b, samples)
 
-    def test_buffer_pack(self):
+    def test_primitive_buffer_pack(self):
         samples = self.SAMPLES
         get_buf = self.get_empty_buffer_generator()
         typedef_groups = self.get_all_typdef_groups()
@@ -282,7 +286,7 @@ class PackableTests:
                             aligned_typedef = align_as(typedef, align)
                             assert_buffer_pack(aligned_typedef, get_buf, s2b, samples, align, offset, origin)
 
-    def test_buffer_unpack(self):
+    def test_primitive_buffer_unpack(self):
         samples = self.SAMPLES
         get_buf = self.get_empty_buffer_generator()
         typedef_groups = self.get_all_typdef_groups()
@@ -301,7 +305,7 @@ class PackableTests:
                             aligned_typedef = align_as(typedef, align)
                             assert_buffer_unpack(aligned_typedef, get_buf, s2b, samples, align, offset, origin)
 
-    def test_buffer_pack_equality(self):
+    def test_primitive_buffer_pack_equality(self):
         samples = self.SAMPLES
         get_buf = self.get_empty_buffer_generator()
         typedef_groups = self.get_all_typdef_groups()
@@ -310,18 +314,18 @@ class PackableTests:
         for origin in self.ORIGINS:
             for offset in self.OFFSETS:
                 for typedefs in typedef_groups:
-                    for i in range(len(typedefs) - 1):  # We don't need to do an N*N comparisons; if each is equal to the previous, they are all equal by induction
+                    for i in range(len(typedefs) - 1):  # We don't need to do an N*N comparisons; if each is equal to the previous, they are all equal by induciton
                         left, right = typedefs[i], typedefs[i + 1]
                         assert_buffer_pack_equality(left, right, get_buf, samples, self.ALIGN, offset, origin)
 
                 for align in self.ALIGNMENTS:
                     for typedefs in typedef_groups:
                         aligned_typedefs = align_as_many(*typedefs, align=align)
-                        for i in range(len(aligned_typedefs) - 1):  # We don't need to do an N*N comparisons; if each is equal to the previous, they are all equal by induction
+                        for i in range(len(aligned_typedefs) - 1):  # We don't need to do an N*N comparisons; if each is equal to the previous, they are all equal by induciton
                             left, right = aligned_typedefs[i], aligned_typedefs[i + 1]
                             assert_buffer_pack_equality(left, right, get_buf, samples, align, offset, origin)
 
-    def test_buffer_unpack_equality(self):
+    def test_primitive_buffer_unpack_equality(self):
         samples = self.SAMPLES
         get_buf = self.get_empty_buffer_generator()
         typedef_groups = self.get_all_typdef_groups()
@@ -330,7 +334,7 @@ class PackableTests:
         for origin in self.ORIGINS:
             for offset in self.OFFSETS:
                 for typedefs, s2b in zip(typedef_groups, s2bs):
-                    for i in range(len(typedefs) - 1):  # We don't need to do an N*N comparisons; if each is equal to the previous, they are all equal by induction
+                    for i in range(len(typedefs) - 1):  # We don't need to do an N*N comparisons; if each is equal to the previous, they are all equal by induciton
                         left, right = typedefs[i], typedefs[i + 1]
                         assert_buffer_unpack_equality(left, right, get_buf, s2b, samples, self.ALIGN, offset, origin)
 
@@ -338,11 +342,11 @@ class PackableTests:
                     aligned_s2bs = self.get_all_sample2bytes(align)
                     for typedefs, s2b in zip(typedef_groups, aligned_s2bs):
                         aligned_typedefs = align_as_many(*typedefs, align=align)
-                        for i in range(len(aligned_typedefs) - 1):  # We don't need to do an N*N comparisons; if each is equal to the previous, they are all equal by induction
+                        for i in range(len(aligned_typedefs) - 1):  # We don't need to do an N*N comparisons; if each is equal to the previous, they are all equal by induciton
                             left, right = aligned_typedefs[i], aligned_typedefs[i + 1]
                             assert_buffer_unpack_equality(left, right, get_buf, s2b, samples, align, offset, origin)
 
-    def test_stream_pack(self):
+    def test_primitive_stream_pack(self):
         samples = self.SAMPLES
         get_buf = self.get_empty_buffer_generator()
         typedef_groups = self.get_all_typdef_groups()
@@ -361,7 +365,7 @@ class PackableTests:
                             aligned_typedef = align_as(typedef, align)
                             assert_stream_pack(aligned_typedef, get_buf, s2b, samples, align, offset, origin)
 
-    def test_stream_unpack(self):
+    def test_primitive_stream_unpack(self):
         samples = self.SAMPLES
         get_buf = self.get_empty_buffer_generator()
         typedef_groups = self.get_all_typdef_groups()
@@ -380,7 +384,7 @@ class PackableTests:
                             aligned_typedef = align_as(typedef, align)
                             assert_stream_unpack(aligned_typedef, get_buf, s2b, samples, align, offset, origin)
 
-    def test_stream_pack_equality(self):
+    def test_primitive_stream_pack_equality(self):
         samples = self.SAMPLES
         get_buf = self.get_empty_buffer_generator()
         typedef_groups = self.get_all_typdef_groups()
@@ -389,18 +393,18 @@ class PackableTests:
         for origin in self.ORIGINS:
             for offset in self.OFFSETS:
                 for typedefs in typedef_groups:
-                    for i in range(len(typedefs) - 1):  # We don't need to do an N*N comparisons; if each is equal to the previous, they are all equal by induction
+                    for i in range(len(typedefs) - 1):  # We don't need to do an N*N comparisons; if each is equal to the previous, they are all equal by induciton
                         left, right = typedefs[i], typedefs[i + 1]
                         assert_stream_pack_equality(left, right, get_buf, samples, self.ALIGN, offset, origin)
 
                 for align in self.ALIGNMENTS:
                     for typedefs in typedef_groups:
                         aligned_typedefs = align_as_many(*typedefs, align=align)
-                        for i in range(len(aligned_typedefs) - 1):  # We don't need to do an N*N comparisons; if each is equal to the previous, they are all equal by induction
+                        for i in range(len(aligned_typedefs) - 1):  # We don't need to do an N*N comparisons; if each is equal to the previous, they are all equal by induciton
                             left, right = aligned_typedefs[i], aligned_typedefs[i + 1]
                             assert_stream_pack_equality(left, right, get_buf, samples, align, offset, origin)
 
-    def test_stream_unpack_equality(self):
+    def test_primitive_stream_unpack_equality(self):
         samples = self.SAMPLES
         get_buf = self.get_empty_buffer_generator()
         typedef_groups = self.get_all_typdef_groups()
@@ -409,7 +413,7 @@ class PackableTests:
         for origin in self.ORIGINS:
             for offset in self.OFFSETS:
                 for typedefs, s2b in zip(typedef_groups, s2bs):
-                    for i in range(len(typedefs) - 1):  # We don't need to do an N*N comparisons; if each is equal to the previous, they are all equal by induction
+                    for i in range(len(typedefs) - 1):  # We don't need to do an N*N comparisons; if each is equal to the previous, they are all equal by induciton
                         left, right = typedefs[i], typedefs[i + 1]
                         assert_stream_unpack_equality(left, right, get_buf, s2b, samples, self.ALIGN, offset, origin)
 
@@ -417,6 +421,6 @@ class PackableTests:
                     aligned_s2bs = self.get_all_sample2bytes(align)
                     for typedefs, s2b in zip(typedef_groups, aligned_s2bs):
                         aligned_typedefs = align_as_many(*typedefs, align=align)
-                        for i in range(len(aligned_typedefs) - 1):  # We don't need to do an N*N comparisons; if each is equal to the previous, they are all equal by induction
+                        for i in range(len(aligned_typedefs) - 1):  # We don't need to do an N*N comparisons; if each is equal to the previous, they are all equal by induciton
                             left, right = aligned_typedefs[i], aligned_typedefs[i + 1]
                             assert_stream_unpack_equality(left, right, get_buf, s2b, samples, align, offset, origin)

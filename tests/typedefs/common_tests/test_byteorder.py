@@ -1,7 +1,7 @@
 import warnings
 from typing import Any, List
 
-from definitions.util import classproperty
+from typedefs.util import classproperty
 from structlib.byteorder import ByteOrder, resolve_byteorder, NativeEndian, NetworkEndian, BigEndian, LittleEndian
 from structlib.protocols.typedef import byteorder_as, byteorder_of, TypeDefByteOrder
 
