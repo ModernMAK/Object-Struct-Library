@@ -9,7 +9,7 @@ from structlib.utils import classproperty
 from structlib.abc_.packing import DataclassPackableABC
 from structlib.errors import PrettyNotImplementedError
 from structlib.protocols.packing import StructPackable, DClassType, DClass
-from structlib.protocols.typedef import native_size_of, TypeDefAlignable, align_of
+from structlib.protocols.typedef import native_size_of, TypeDefAlignable, align_of, AttrProtocolMeta
 from structlib.typedefs.array import AnyPackableTypeDef
 from structlib.typedefs.structure import Struct
 
@@ -99,7 +99,7 @@ def resolve_annotations(raw_annotations: Dict[str, Type[Any]], module_name: Opti
     return annotations
 
 
-class TypeDefDataclassMetaclass(_ProtocolMeta, ABCMeta, type):
+class TypeDefDataclassMetaclass(AttrProtocolMeta, ABCMeta, type):
     if sys.version_info < (3, 5):  # 3.5 >= is ordered by design
         @classmethod
         def __prepare__(cls, name, bases):
