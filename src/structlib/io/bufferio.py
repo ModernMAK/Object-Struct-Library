@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Tuple
+from typing import Tuple, Union
 
 from structlib.protocols.typedef import calculate_padding
 from structlib.typing_ import WritableBuffer, ReadableBuffer
@@ -17,16 +17,38 @@ def write(buffer: WritableBuffer, data: bytes, alignment: int, offset: int, orig
     :param origin:
     :return:
     """
-    padding = calculate_padding(alignment, offset)
-    apply_padding_to_buffer(buffer, padding, offset, origin)
+
     data_size = len(data)
-    buffer[origin + offset + padding:origin + offset + padding + data_size] = data
-    return padding + data_size
+
+    prefix_padding = calculate_padding(alignment, offset)
+    postfix_padding = calculate_padding(alignment, offset + prefix_padding + data_size)
+
+    buffer_offset = origin + offset + prefix_padding
+    postfix_offset = offset + prefix_padding + data_size
+
+    apply_padding_to_buffer(buffer, prefix_padding, offset, origin)
+    buffer[buffer_offset:buffer_offset + data_size] = data
+    apply_padding_to_buffer(buffer, postfix_padding, postfix_offset, origin)
+
+    return prefix_padding + data_size + postfix_padding
+
+
+def pad_data_to_boundary(data: bytes, alignment: int) -> bytes:
+    size = len(data)
+    suffix_padding = calculate_padding(alignment, size)
+    if suffix_padding > 0:
+        suffix_padding_buf = create_padding_buffer(suffix_padding)
+        data += suffix_padding_buf
+    return data
 
 
 def read(buffer: ReadableBuffer, data_size: int, alignment: int, offset: int, origin: int = 0) -> Tuple[int, bytes]:
-    padding = calculate_padding(alignment, offset)
-    return padding + data_size, buffer[origin + offset + padding:origin + offset + padding + data_size]
+    prefix_padding = calculate_padding(alignment, offset)
+    buffer_offset = origin + offset + prefix_padding
+    postfix_offset = offset + prefix_padding + data_size
+    postfix_padding = calculate_padding(alignment, postfix_offset)
+
+    return prefix_padding + data_size + postfix_padding, buffer[buffer_offset:buffer_offset + data_size]
 
 
 def create_padding_buffer(padding: int) -> bytes:
