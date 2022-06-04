@@ -8,7 +8,7 @@ from structlib.typing_ import WritableBuffer, ReadableBuffer, ReadableStream, Wr
 @runtime_checkable
 class Packable(Protocol):
     @abstractmethod
-    def pack(self, *args: Any) -> bytes:
+    def pack(self, args: Any) -> bytes:
         raise PrettyNotImplementedError(self, self.pack)
 
     @abstractmethod
@@ -16,7 +16,7 @@ class Packable(Protocol):
         raise PrettyNotImplementedError(self, self.unpack)
 
     @abstractmethod
-    def pack_buffer(self, buffer: WritableBuffer, *args: Any, offset: int, origin: int) -> int:
+    def pack_buffer(self, buffer: WritableBuffer, args: Any, offset: int, origin: int) -> int:
         raise PrettyNotImplementedError(self, self.pack_buffer)
 
     @abstractmethod
@@ -24,7 +24,7 @@ class Packable(Protocol):
         raise PrettyNotImplementedError(self, self.unpack_buffer)
 
     @abstractmethod
-    def pack_stream(self, stream: WritableStream, *args: Any, origin: int) -> int:
+    def pack_stream(self, stream: WritableStream, args: Any, origin: int) -> int:
         raise PrettyNotImplementedError(self, self.pack_stream)
 
     @abstractmethod
@@ -90,33 +90,6 @@ class PrimitivePackable(Protocol):
         raise PrettyNotImplementedError(self, self.unpack_prim_stream)
 
 
-@runtime_checkable
-class PrimitiveIterPackable(Protocol):
-    @abstractmethod
-    def iter_prim_pack(self, *args: TPrim) -> bytes:
-        raise PrettyNotImplementedError(self, self.iter_prim_pack)
-
-    @abstractmethod
-    def iter_unpack_prim(self, buffer: bytes, iter_count: int) -> TPrimTuple:
-        raise PrettyNotImplementedError(self, self.iter_unpack_prim)
-
-    @abstractmethod
-    def iter_prim_pack_buffer(self, buffer: WritableBuffer, *args: TPrim, offset: int = 0, origin: int = 0) -> int:
-        raise PrettyNotImplementedError(self, self.iter_prim_pack_buffer)
-
-    @abstractmethod
-    def iter_unpack_prim_buffer(self, buffer: ReadableBuffer, iter_count: int, *, offset: int = 0, origin: int = 0) -> Tuple[int, TPrimTuple]:
-        raise PrettyNotImplementedError(self, self.iter_unpack_prim_buffer)
-
-    @abstractmethod
-    def iter_prim_pack_stream(self, buffer: WritableStream, *args: TPrim, origin: int = 0) -> int:
-        raise PrettyNotImplementedError(self, self.iter_prim_pack_stream)
-
-    @abstractmethod
-    def iter_unpack_prim_stream(self, buffer: ReadableStream, iter_count: int, *, origin: int = 0) -> Tuple[int, TPrimTuple]:
-        raise PrettyNotImplementedError(self, self.iter_unpack_prim_stream)
-
-
 DClass = TypeVar("DClass")
 DClassType = Type[DClass]
 DClassTuple = Tuple[DClass, ...]
@@ -153,6 +126,77 @@ class DataclassPackable(Protocol):
 
 
 @runtime_checkable
+class ConstPackable(Protocol):
+    """
+    A special packable for 'const' types; types that should know how to pack/unpack themselves without arguments.
+
+    Padding / Constant Bytes / Data which should be ignored
+    """
+
+    @abstractmethod
+    def const_pack(self) -> bytes:
+        raise PrettyNotImplementedError(self, self.const_pack)
+
+    @abstractmethod
+    def const_unpack(self, buffer: bytes) -> None:
+        raise PrettyNotImplementedError(self, self.const_unpack)
+
+    @abstractmethod
+    def const_pack_buffer(self, buffer: WritableBuffer, *, offset: int, origin: int) -> int:
+        raise PrettyNotImplementedError(self, self.const_pack_buffer)
+
+    @abstractmethod
+    def const_unpack_buffer(self, buffer: ReadableBuffer, *, offset: int, origin: int) -> Tuple[int, None]:
+        raise PrettyNotImplementedError(self, self.const_unpack_buffer)
+
+    @abstractmethod
+    def const_pack_stream(self, stream: WritableStream, *, origin: int) -> int:
+        raise PrettyNotImplementedError(self, self.const_pack_stream)
+
+    @abstractmethod
+    def const_unpack_stream(self, stream: ReadableStream, *, origin: int) -> Tuple[int, None]:
+        raise PrettyNotImplementedError(self, self.const_unpack_stream)
+
+
+@runtime_checkable
+class StructPackable(Protocol):
+    @abstractmethod
+    def struct_pack(self, *args: Any) -> bytes:
+        raise PrettyNotImplementedError(self, self.struct_pack)
+
+    @abstractmethod
+    def struct_unpack(self, buffer: bytes) -> Tuple[Any, ...]:
+        raise PrettyNotImplementedError(self, self.struct_unpack)
+
+    @abstractmethod
+    def struct_pack_buffer(self, buffer: WritableBuffer, *args: Any, offset: int, origin: int) -> int:
+        raise PrettyNotImplementedError(self, self.struct_pack_buffer)
+
+    @abstractmethod
+    def struct_unpack_buffer(self, buffer: ReadableBuffer, *, offset: int, origin: int) -> Tuple[int, Tuple[Any, ...]]:
+        raise PrettyNotImplementedError(self, self.struct_unpack_buffer)
+
+    @abstractmethod
+    def struct_pack_stream(self, stream: WritableStream, *args: Any, origin: int) -> int:
+        raise PrettyNotImplementedError(self, self.struct_pack_stream)
+
+    @abstractmethod
+    def struct_unpack_stream(self, stream: ReadableStream, *, origin: int) -> Tuple[int, Tuple[Any, ...]]:
+        raise PrettyNotImplementedError(self, self.struct_unpack_stream)
+
+
+EXP_PRIM_ARGS = 1
+EXP_DCLASS_ARGS = [0, 1]
+
+
+def PrettyTypeError(self, proto):
+    return TypeError(f"`{self.__class__.__name__}` does not implement an explicit `{proto.__class__.__name__}` protocol!")
+
+
+AnyPackable = Union[Packable, StructPackable, PrimitivePackable, DataclassPackable]
+
+
+@runtime_checkable
 class DataclassIterPackable(Protocol):
     @classmethod
     @abstractmethod
@@ -186,68 +230,36 @@ class DataclassIterPackable(Protocol):
 
 
 @runtime_checkable
-class StructPackable(Protocol):
+class ConstIterPackable(Protocol):
+    @classmethod
     @abstractmethod
-    def struct_pack(self, *args: Any) -> bytes:
-        raise PrettyNotImplementedError(self, self.struct_pack)
+    def iter_const_pack(cls, *args: DClass) -> bytes:
+        raise PrettyNotImplementedError(cls, cls.iter_const_pack)
 
+    @classmethod
     @abstractmethod
-    def struct_unpack(self, buffer: bytes) -> Tuple[Any, ...]:
-        raise PrettyNotImplementedError(self, self.struct_unpack)
+    def iter_const_unpack(cls, buffer: bytes, iter_count: int) -> None:
+        raise PrettyNotImplementedError(cls, cls.iter_const_unpack)
 
+    @classmethod
     @abstractmethod
-    def struct_pack_buffer(self, buffer: WritableBuffer, *args: Any, offset: int, origin: int) -> int:
-        raise PrettyNotImplementedError(self, self.struct_pack_buffer)
+    def iter_const_pack_buffer(cls, buffer: WritableBuffer, *, offset: int, origin: int) -> int:
+        raise PrettyNotImplementedError(cls, cls.iter_const_pack_buffer)
 
+    @classmethod
     @abstractmethod
-    def struct_unpack_buffer(self, buffer: ReadableBuffer, *, offset: int, origin: int) -> Tuple[int, Tuple[Any, ...]]:
-        raise PrettyNotImplementedError(self, self.struct_unpack_buffer)
+    def iter_const_unpack_buffer(cls: DClassType, buffer: ReadableBuffer, iter_count: int, *, offset: int, origin: int) -> Tuple[int, None]:
+        raise PrettyNotImplementedError(cls, cls.iter_dclass_unpack_buffer)
 
+    @classmethod
     @abstractmethod
-    def struct_pack_stream(self, stream: WritableStream, *args: Any, origin: int) -> int:
-        raise PrettyNotImplementedError(self, self.struct_pack_stream)
+    def iter_const_pack_stream(cls, stream: WritableStream, *, origin: int) -> int:
+        raise PrettyNotImplementedError(cls, cls.iter_const_pack_stream)
 
+    @classmethod
     @abstractmethod
-    def struct_unpack_stream(self, stream: ReadableStream, *, origin: int) -> Tuple[int, Tuple[Any, ...]]:
-        raise PrettyNotImplementedError(self, self.struct_unpack_stream)
-
-
-@runtime_checkable
-class StructIterPackable(Protocol):
-    @abstractmethod
-    def iter_struct_pack(self, *args: Tuple[Any, ...]) -> bytes:
-        raise PrettyNotImplementedError(self, self.iter_struct_pack)
-
-    @abstractmethod
-    def iter_struct_unpack(self, buffer: bytes, iter_count: int) -> Tuple[Tuple[Any, ...], Any]:
-        raise PrettyNotImplementedError(self, self.iter_struct_unpack)
-
-    @abstractmethod
-    def iter_struct_pack_buffer(self, buffer: WritableBuffer, *args: Tuple[Any, ...], offset: int, origin: int) -> int:
-        raise PrettyNotImplementedError(self, self.iter_struct_pack_buffer)
-
-    @abstractmethod
-    def iter_struct_unpack_buffer(self, buffer: ReadableBuffer,iter_count: int, *, offset: int, origin: int) -> Tuple[int, Tuple[Tuple[Any, ...], ...]]:
-        raise PrettyNotImplementedError(self, self.iter_struct_unpack_buffer)
-
-    @abstractmethod
-    def iter_struct_pack_stream(self, stream: WritableStream, *args: Tuple[Any, ...], origin: int) -> int:
-        raise PrettyNotImplementedError(self, self.iter_struct_pack_stream)
-
-    @abstractmethod
-    def iter_struct_unpack_stream(self, stream: ReadableStream,iter_count: int, *, origin: int) -> Tuple[int, Tuple[Tuple[Any, ...], ...]]:
-        raise PrettyNotImplementedError(self, self.iter_struct_unpack_stream)
-
-
-EXP_PRIM_ARGS = 1
-EXP_DCLASS_ARGS = [0, 1]
-
-
-def PrettyTypeError(self, proto):
-    return TypeError(f"`{self.__class__.__name__}` does not implement an explicit `{proto.__class__.__name__}` protocol!")
-
-
-AnyPackable = Union[Packable, StructPackable, PrimitivePackable, DataclassPackable]
+    def iter_const_unpack_stream(cls, stream: ReadableStream, iter_count: int, *, origin: int) -> Tuple[int, None]:
+        raise PrettyNotImplementedError(cls, cls.iter_const_unpack_stream)
 
 
 def pack(self: AnyPackable, *args: Any) -> bytes:
@@ -305,6 +317,7 @@ def nested_pack(self: AnyPackable, args: Any) -> bytes:
         return dclass_self.dclass_pack()
     else:
         raise PrettyTypeError(self, Packable)
+
 
 def unpack(self, buffer: bytes) -> Any:
     if isinstance(self, Packable):
@@ -386,12 +399,6 @@ def unpack_stream(self, stream: ReadableStream, *, origin: int) -> Tuple[int, An
 def iter_pack(self, *args: Any) -> bytes:
     if isinstance(self, IterPackable):
         return self.iter_pack(*args)
-    elif isinstance(self, StructIterPackable):
-        return self.iter_struct_pack(*args)
-    elif isinstance(self, PrimitiveIterPackable):
-        return self.iter_prim_pack(*args)
-    elif isinstance(self, DataclassIterPackable):
-        return self.iter_dclass_pack(*args)
     else:
         raise PrettyTypeError(self, IterPackable)
 
@@ -399,12 +406,6 @@ def iter_pack(self, *args: Any) -> bytes:
 def iter_unpack(self, buffer: bytes, iter_count: int) -> Any:
     if isinstance(self, IterPackable):
         return self.iter_unpack(buffer, iter_count)
-    elif isinstance(self, StructIterPackable):
-        return self.iter_struct_unpack(buffer, iter_count)
-    elif isinstance(self, PrimitiveIterPackable):
-        return self.iter_unpack_prim(buffer, iter_count)
-    elif isinstance(self, DataclassIterPackable):
-        return self.iter_dclass_unpack(buffer, iter_count)
     else:
         raise PrettyTypeError(self, IterPackable)
 
@@ -412,12 +413,6 @@ def iter_unpack(self, buffer: bytes, iter_count: int) -> Any:
 def iter_pack_buffer(self, buffer: WritableBuffer, *args: Any, offset: int, origin: int) -> int:
     if isinstance(self, IterPackable):
         return self.iter_pack_buffer(buffer, *args, offset=offset, origin=origin)
-    elif isinstance(self, StructIterPackable):
-        return self.iter_struct_pack_buffer(buffer, *args, offset=offset, origin=origin)
-    elif isinstance(self, PrimitiveIterPackable):
-        return self.iter_prim_pack_buffer(buffer, *args, offset=offset, origin=origin)
-    elif isinstance(self, DataclassIterPackable):
-        return self.iter_dclass_pack_buffer(buffer, *args, offset=offset, origin=origin)
     else:
         raise PrettyTypeError(self, IterPackable)
 
@@ -425,12 +420,6 @@ def iter_pack_buffer(self, buffer: WritableBuffer, *args: Any, offset: int, orig
 def iter_unpack_buffer(self, buffer: ReadableBuffer, iter_count: int, *, offset: int, origin: int) -> Tuple[int, Any]:
     if isinstance(self, IterPackable):
         return self.iter_unpack_buffer(buffer, iter_count, offset=offset, origin=origin)
-    elif isinstance(self, StructIterPackable):
-        return self.iter_struct_unpack_buffer(buffer, iter_count, offset=offset, origin=origin)
-    elif isinstance(self, PrimitiveIterPackable):
-        return self.iter_unpack_prim_buffer(buffer, iter_count, offset=offset, origin=origin)
-    elif isinstance(self, DataclassIterPackable):
-        return self.iter_dclass_unpack_buffer(buffer, iter_count, offset=offset, origin=origin)
     else:
         raise PrettyTypeError(self, IterPackable)
 
@@ -438,12 +427,6 @@ def iter_unpack_buffer(self, buffer: ReadableBuffer, iter_count: int, *, offset:
 def iter_pack_stream(self, stream: WritableStream, *args: Any, origin: int) -> int:
     if isinstance(self, IterPackable):
         return self.iter_pack_stream(stream, *args, origin=origin)
-    elif isinstance(self, StructIterPackable):
-        return self.iter_struct_pack_stream(stream, *args, origin=origin)
-    elif isinstance(self, PrimitiveIterPackable):
-        return self.iter_prim_pack_stream(stream, *args, origin=origin)
-    elif isinstance(self, DataclassIterPackable):
-        return self.iter_dclass_pack_stream(stream, *args, origin=origin)
     else:
         raise PrettyTypeError(self, IterPackable)
 
@@ -451,11 +434,5 @@ def iter_pack_stream(self, stream: WritableStream, *args: Any, origin: int) -> i
 def iter_unpack_stream(self, stream: ReadableStream, iter_count: int, *, origin: int) -> Tuple[int, Any]:
     if isinstance(self, IterPackable):
         return self.iter_unpack_stream(stream, iter_count, origin=origin)
-    elif isinstance(self, StructIterPackable):
-        return self.iter_struct_unpack_stream(stream, iter_count, origin=origin)
-    elif isinstance(self, PrimitiveIterPackable):
-        return self.iter_unpack_prim_stream(stream, iter_count, origin=origin)
-    elif isinstance(self, DataclassIterPackable):
-        return self.iter_dclass_unpack_stream(stream, iter_count, origin=origin)
     else:
         raise PrettyTypeError(self, IterPackable)
