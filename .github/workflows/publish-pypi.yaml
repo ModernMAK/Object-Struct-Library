@@ -22,11 +22,9 @@ jobs:
     - name: Build package
       run: python -m build
     - name: Publish package
-      env:
-        api_token: ${{ secrets.PYPI_API_TOKEN }}
-      uses: pypa/gh-action-pypi-publish@27b31702a0e7fc50959f5ad993c78deac1bdfc29
+      uses: pypa/gh-action-pypi-publish@release/v1
       with:
         user: __token__
-        password: api_token
+        password: ${{ Secrets.PYPI_API_TOKEN }}
         repository_url: https://pypi.org/legacy/
 
