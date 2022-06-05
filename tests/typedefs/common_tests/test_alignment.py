@@ -1,8 +1,8 @@
 import warnings
-from typing import List, Any
+from typing import List
 
-from typedefs.util import classproperty
 from structlib.protocols.typedef import align_of, align_as, TypeDefAlignable
+from tests.typedefs.util import classproperty
 
 
 # AVOID using test as prefix

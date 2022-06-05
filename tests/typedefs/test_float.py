@@ -1,13 +1,12 @@
 from typing import List, Any
 
-import rng
-from typedefs.common_tests import AlignmentTests, DefinitionTests, PrimitiveTests, Sample2Bytes, ByteorderTests
-from typedefs.util import classproperty
 from structlib.byteorder import ByteOrder, resolve_byteorder, NativeEndian, BigEndian, LittleEndian, NetworkEndian
-from structlib.protocols.packing import Packable
 from structlib.protocols.typedef import TypeDefByteOrder, TypeDefAlignable
 from structlib.typedefs import floating as _float
 from structlib.typedefs.floating import FloatDefinition
+from tests import rng
+from tests.typedefs.common_tests import AlignmentTests, DefinitionTests, ByteorderTests, PrimitiveTests, Sample2Bytes
+from tests.typedefs.util import classproperty
 
 
 # AVOID using test as prefix

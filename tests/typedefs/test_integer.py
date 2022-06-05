@@ -1,8 +1,8 @@
 from typing import List, Any
 
-import rng
-from typedefs.common_tests import AlignmentTests, DefinitionTests, ByteorderTests,  PrimitiveTests, Sample2Bytes
-from typedefs.util import classproperty
+from tests import rng
+from tests.typedefs.common_tests import AlignmentTests, DefinitionTests, ByteorderTests, PrimitiveTests, Sample2Bytes
+from tests.typedefs.util import classproperty
 from structlib.byteorder import ByteOrder, resolve_byteorder, NetworkEndian, LittleEndian, NativeEndian, BigEndian
 from structlib.protocols.packing import Packable
 from structlib.protocols.typedef import TypeDefAlignable, TypeDefByteOrder

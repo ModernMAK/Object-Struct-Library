@@ -2,7 +2,7 @@ import math
 from io import BytesIO
 from typing import List, Any, Callable
 
-from typedefs.util import classproperty
+from tests.typedefs.util import classproperty
 from structlib.byteorder import ByteOrder, NativeEndian, BigEndian, LittleEndian, NetworkEndian
 from structlib.protocols.packing import StructPackable
 from structlib.protocols.typedef import align_as, calculate_padding

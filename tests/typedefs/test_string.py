@@ -1,15 +1,15 @@
 from typing import List, Any
 
-import rng
-from typedefs.common_tests import  AlignmentTests, DefinitionTests, PrimitiveTests, Sample2Bytes
-from typedefs.util import classproperty
+from tests import rng
+from tests.typedefs.common_tests import AlignmentTests, DefinitionTests, ByteorderTests, PrimitiveTests, Sample2Bytes
+from tests.typedefs.util import classproperty
 from structlib.byteorder import ByteOrder
 from structlib.protocols.packing import PrimitivePackable
 from structlib.protocols.typedef import TypeDefAlignable
 from structlib.typedefs.strings import StringBuffer, CStringBuffer
 
 
-class TestString(PrimitiveTests, DefinitionTests,  AlignmentTests):
+class TestString(PrimitiveTests, DefinitionTests, AlignmentTests):
     @classproperty
     def NATIVE_PACKABLE(self) -> List[PrimitivePackable]:
         return [StringBuffer(self.ARR_SIZE, encoding=self.ENCODING)]

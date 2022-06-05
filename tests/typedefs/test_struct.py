@@ -1,17 +1,15 @@
 from abc import ABC
 from typing import List, Any, Tuple
 
-import rng
-from typedefs.common_tests import AlignmentTests
-from typedefs.common_tests.test_packable import Sample2Bytes
-from typedefs.common_tests.test_struct import StructureTests
-from typedefs.util import classproperty
 from structlib.byteorder import ByteOrder, NativeEndian
 from structlib.protocols.packing import Packable
 from structlib.protocols.typedef import TypeDefAlignable, native_size_of, align_of
 from structlib.typedefs import integer, floating
 from structlib.typedefs.floating import FloatDefinition
 from structlib.typedefs.structure import Struct
+from tests import rng
+from tests.typedefs.common_tests import AlignmentTests, StructureTests, Sample2Bytes
+from tests.typedefs.util import classproperty
 
 
 class StructTests(AlignmentTests, StructureTests, ABC):

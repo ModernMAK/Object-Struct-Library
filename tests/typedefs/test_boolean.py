@@ -1,16 +1,13 @@
-from abc import ABC
 from typing import List, Any
 
-import rng
-from typedefs.common_tests.test_alignment import AlignmentTests
-from typedefs.common_tests.test_definition import DefinitionTests
-from typedefs.common_tests.test_primitive import PrimitiveTests, Sample2Bytes
-from typedefs.util import classproperty
 from structlib.byteorder import ByteOrder
 from structlib.protocols.packing import PrimitivePackable
 from structlib.protocols.typedef import TypeDefAlignable
 from structlib.typedefs import boolean
 from structlib.typedefs.boolean import BooleanDefinition
+from tests import rng
+from tests.typedefs.common_tests import AlignmentTests, DefinitionTests, PrimitiveTests, Sample2Bytes
+from tests.typedefs.util import classproperty
 
 
 # AVOID using test as prefix
