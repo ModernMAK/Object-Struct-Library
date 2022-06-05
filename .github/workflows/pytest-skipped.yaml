@@ -9,12 +9,14 @@ on:
       - 'src/**'
       - 'tests/**'
       - '.github/workflows/pytest.yaml'
+      - '.github/workflows/pytest-skipped.yaml'
   pull_request:
     branches: [ main ]
     paths-ignore:
       - 'src/**'
       - 'tests/**'
       - '.github/workflows/pytest.yaml'
+      - '.github/workflows/pytest-skipped.yaml'
 
 jobs:
   build:
