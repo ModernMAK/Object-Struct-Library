@@ -5,13 +5,13 @@ name: Pytest
 
 on:
   push:
-    branches: [ main, indev ]
+    branches: [ main ]
     paths:
       - 'src/**'
       - 'tests/**'
       - '.github/workflows/pytest.yaml'
   pull_request:
-    branches: [ main, indev ]
+    branches: [ main ]
     paths:
       - 'src/**'
       - 'tests/**'

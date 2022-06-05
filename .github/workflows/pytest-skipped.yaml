@@ -4,14 +4,14 @@ name: Pytest
 
 on:
   push:
-    branches: [ main, indev ]
+    branches: [ main ]
     paths-ignore:
       - 'src/**'
       - 'tests/**'
       - '.github/workflows/pytest.yaml'
       - '.github/workflows/pytest-skipped.yaml'
   pull_request:
-    branches: [ main, indev ]
+    branches: [ main ]
     paths-ignore:
       - 'src/**'
       - 'tests/**'
