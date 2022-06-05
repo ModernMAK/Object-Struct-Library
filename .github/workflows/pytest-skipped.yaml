@@ -11,7 +11,7 @@ on:
       - '.github/workflows/pytest.yaml'
   pull_request:
     branches: [ main ]
-    paths:
+    paths-ignore:
       - 'src/**'
       - 'tests/**'
       - '.github/workflows/pytest.yaml'
