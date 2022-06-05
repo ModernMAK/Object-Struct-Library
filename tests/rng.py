@@ -62,5 +62,8 @@ def generate_strings(chunk_count: int, seed: int, max_str_size: int):
     for _ in range(chunk_count):
         s_buf = rand.choice(pool)
         while len(s_buf) < max_str_size and rand.choice([True, False]):
-            s_buf += " " + rand.choice(pool)
+            word = rand.choice(pool)
+            if len(s_buf) + 1 + len(word) > max_str_size:
+                break  # adding word would exceed max_str_size, stop and return word
+            s_buf += " " + word
         yield s_buf

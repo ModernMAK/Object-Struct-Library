@@ -82,7 +82,7 @@ class TestString(PrimitiveTests, DefinitionTests, AlignmentTests):
         for seed in seeds:
             for s in rng.generate_strings(s_per_seed, seed, arr_size):
                 s_enc = s.encode(encoding)
-                if len(s_enc) < arr_size:
+                if len(s_enc) < arr_size:  # we need to pad the string
                     s_enc = bytearray(s_enc)
                     s_enc.extend([0x00] * (arr_size - len(s_enc)))
                     s_dec = s_enc.decode(encoding)
