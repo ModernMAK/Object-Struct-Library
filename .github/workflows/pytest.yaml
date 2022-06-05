@@ -6,16 +6,16 @@ name: Pytest
 on:
   push:
     branches: [ main ]
-    paths:
-      - 'src/**'
-      - 'tests/**'
-      - '.github/workflows/pytest.yaml'
+#    paths:
+#      - 'src/**'
+#      - 'tests/**'
+#      - '.github/workflows/pytest.yaml'
   pull_request:
     branches: [ main ]
-    paths:
-      - 'src/**'
-      - 'tests/**'
-      - '.github/workflows/pytest.yaml'
+#    paths:
+#      - 'src/**'
+#      - 'tests/**'
+#      - '.github/workflows/pytest.yaml'
 
 jobs:
   build:
