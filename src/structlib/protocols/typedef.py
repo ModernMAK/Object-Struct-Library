@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import collections
 from abc import abstractmethod
-from typing import Union, Protocol, TypeVar, ClassVar, runtime_checkable, _ProtocolMeta, _is_callable_members_only, _get_protocol_attrs, Generic, _allow_reckless_class_cheks
+from typing import Union, Protocol, TypeVar, ClassVar, runtime_checkable, _ProtocolMeta, _is_callable_members_only, _get_protocol_attrs
 
 from structlib.byteorder import ByteOrder, resolve_byteorder
 from structlib.errors import PrettyNotImplementedError
