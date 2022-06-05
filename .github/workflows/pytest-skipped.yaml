@@ -1,0 +1,23 @@
+# This workflow should allow protected branches to merge when Pytest is a required check
+# While modifying pytest.yaml will invalidate tests, modifying this file (pytest-skipped.yaml) will not invalidate tests
+name: Pytest
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'src/**'
+      - 'tests/**'
+      - '.github/workflows/pytest.yaml'
+  pull_request:
+    branches: [ main ]
+    paths-ignore:
+      - 'src/**'
+      - 'tests/**'
+      - '.github/workflows/pytest.yaml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: 'echo "No build required" '
