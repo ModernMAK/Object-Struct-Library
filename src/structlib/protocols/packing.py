@@ -64,7 +64,7 @@ TPrimTuple = Tuple[TPrim, ...]
 
 
 @runtime_checkable
-class PrimitivePackable(Protocol):
+class PrimitivePackable(Protocol[TPrim]):
     @abstractmethod
     def prim_pack(self, arg: TPrim) -> bytes:
         raise PrettyNotImplementedError(self, self.prim_pack)

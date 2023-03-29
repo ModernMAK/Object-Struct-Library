@@ -10,11 +10,11 @@ def write(buffer: WritableBuffer, data: bytes, alignment: int, offset: int, orig
     """
     Writes data to a buffer, aligned to the `alignment boundaries` defined by alignment & origin
 
-    :param buffer:
-    :param data:
-    :param alignment:
-    :param offset:
-    :param origin:
+    :param buffer: A writable bytes-like buffer
+    :param data: The raw bytes to write
+    :param alignment: The alignment the bytes should
+    :param offset: The offset from the origin to write to.
+    :param origin: The origin to offset from. Also determines how
     :return:
     """
 
@@ -51,11 +51,11 @@ def read(buffer: ReadableBuffer, data_size: int, alignment: int, offset: int, or
     return prefix_padding + data_size + postfix_padding, buffer[buffer_offset:buffer_offset + data_size]
 
 
-def create_padding_buffer(padding: int) -> bytes:
-    return bytes([0x00] * padding)
+def create_padding_buffer(padding: int, pad_value:int=0) -> bytes:
+    return bytes([pad_value] * padding)
 
 
-def apply_padding_to_buffer(buffer: WritableBuffer, padding: int, offset: int, origin: int = 0):
+def apply_padding_to_buffer(buffer: WritableBuffer, padding: int, offset: int, origin: int = 0, pad_value:int=0):
     # TypeError: 'bytes' object does not support item assignment ~ use bytearray instead
-    pad_buffer = create_padding_buffer(padding)
+    pad_buffer = create_padding_buffer(padding,pad_value=pad_value)
     buffer[origin + offset:origin + offset + padding] = pad_buffer

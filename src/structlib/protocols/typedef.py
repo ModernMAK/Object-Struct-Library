@@ -103,6 +103,7 @@ def calculate_padding(alignment: int, size_or_offset: int) -> int:
     """
     Calculates the padding required to align a buffer to a boundary.
 
+    This function works for both sizes and offsets, but its result means something different depending on whether it was given a size or an offset.
     If using a size; the padding is the padding required to align the type to the end of it's next `over aligned` boundary (suffix padding).
     If using an offset; the padding required to align the type to the start of its next `over aligned` boundary (prefix padding).
 
