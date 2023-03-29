@@ -6,7 +6,9 @@ from structlib.protocols.typedef import align_of
 from structlib.utils import default_if_none, auto_pretty_repr
 
 
-class BooleanDefinition(PrimitivePackableABC, IterPackableABC, TypeDefSizableABC, TypeDefAlignableABC):
+class BooleanDefinition(
+    PrimitivePackableABC, IterPackableABC, TypeDefSizableABC, TypeDefAlignableABC
+):
     NATIVE_SIZE = 1  # Booleans are always 1 byte
 
     TRUE = 0x01
@@ -27,7 +29,7 @@ class BooleanDefinition(PrimitivePackableABC, IterPackableABC, TypeDefSizableABC
     def __eq__(self, other):
         if self is other:
             return True
-        elif isinstance(other,BooleanDefinition):
+        elif isinstance(other, BooleanDefinition):
             return self.__typedef_alignment__ == other.__typedef_alignment__
         else:
             return False
@@ -37,7 +39,9 @@ class BooleanDefinition(PrimitivePackableABC, IterPackableABC, TypeDefSizableABC
         padding = alignment - self.NATIVE_SIZE
         padding_buffer = bytearray([0x00] * padding)
         packed = [self.TRUE_BUF if arg else self.FALSE_BUF for arg in args]
-        result = padding_buffer.join(packed)  # apply suffix padding to every element except Nth
+        result = padding_buffer.join(
+            packed
+        )  # apply suffix padding to every element except Nth
         result.extend(padding_buffer)  # Apply suffix padding to Nth element
         return result
 
@@ -63,7 +67,7 @@ class BooleanDefinition(PrimitivePackableABC, IterPackableABC, TypeDefSizableABC
 
     def __str__(self):
         alignment = align_of(self)
-        str_align = f' @{alignment}' if alignment is None else ''
+        str_align = f" @{alignment}" if alignment is None else ""
         return f"Boolean{str_align}"
 
     def __repr__(self):

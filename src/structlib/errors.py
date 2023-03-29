@@ -26,7 +26,12 @@ class ArgTypeError(PackError):
 
 
 class ArgCountError(StructError):
-    def __init__(self, class_or_func_name: str, received_args: int, expected_args: Union[List[int],int]):
+    def __init__(
+        self,
+        class_or_func_name: str,
+        received_args: int,
+        expected_args: Union[List[int], int],
+    ):
         self.name = class_or_func_name
         self.received_args = received_args
         self.expected_args = expected_args
@@ -56,7 +61,9 @@ class FixedBufferSizeError(StructError):
         self.expected_size = expected_size
 
     def __str__(self):
-        return f"Buffer is '{self.buf_size}' bytes, expected '{self.expected_size}' bytes!"
+        return (
+            f"Buffer is '{self.buf_size}' bytes, expected '{self.expected_size}' bytes!"
+        )
 
 
 class AlignmentError(StructError):

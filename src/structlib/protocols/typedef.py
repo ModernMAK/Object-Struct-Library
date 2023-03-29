@@ -1,7 +1,16 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Union, Protocol, TypeVar, ClassVar, runtime_checkable, _ProtocolMeta, _is_callable_members_only, _get_protocol_attrs
+from typing import (
+    Union,
+    Protocol,
+    TypeVar,
+    ClassVar,
+    runtime_checkable,
+    _ProtocolMeta,
+    _is_callable_members_only,
+    _get_protocol_attrs,
+)
 
 from structlib.byteorder import ByteOrder, resolve_byteorder
 from structlib.errors import PrettyNotImplementedError
@@ -16,16 +25,20 @@ class AttrProtocolMeta(_ProtocolMeta):
     def __instancecheck__(cls, instance):
         # We need this method for situations where attributes are
         # assigned in __init__.
-        if ((not getattr(cls, '_is_protocol', False) or
-             _is_callable_members_only(cls)) and
-                issubclass(instance.__class__, cls)):
+        if (
+            not getattr(cls, "_is_protocol", False) or _is_callable_members_only(cls)
+        ) and issubclass(instance.__class__, cls):
             return True
         if cls._is_protocol:
-            if all(hasattr(instance, attr) and
-                   # All *methods* can be blocked by setting them to None.
-                   (not callable(getattr(cls, attr, None)) or
-                    getattr(instance, attr) is not None)
-                   for attr in _get_protocol_attrs(cls)):
+            if all(
+                hasattr(instance, attr) and
+                # All *methods* can be blocked by setting them to None.
+                (
+                    not callable(getattr(cls, attr, None))
+                    or getattr(instance, attr) is not None
+                )
+                for attr in _get_protocol_attrs(cls)
+            ):
                 return True
             else:
                 return False
@@ -93,7 +106,9 @@ def byteorder_of(typedef: TypeDefByteOrder) -> ByteOrder:
 
 def byteorder_as(typedef: T, byteorder: Union[TypeDefByteOrder, ByteOrder]) -> T:
     if byteorder is None:
-        byteorder = resolve_byteorder()  # For consistent behaviour, we don't just return NativeEndian
+        byteorder = (
+            resolve_byteorder()
+        )  # For consistent behaviour, we don't just return NativeEndian
     if isinstance(byteorder, TypeDefByteOrder):
         byteorder = byteorder_of(byteorder)
     return typedef.__typedef_byteorder_as__(byteorder)

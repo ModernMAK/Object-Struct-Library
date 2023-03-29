@@ -7,7 +7,15 @@ from structlib.abc_.packing import StructPackableABC
 from structlib.abc_.typedef import TypeDefAlignableABC, TypeDefSizableABC
 from structlib.io import bufferio, streamio
 from structlib.protocols.packing import nested_pack, unpack_buffer
-from structlib.protocols.typedef import TypeDefSizable, TypeDefAlignable, align_of, TypeDefSizableAndAlignable, size_of, native_size_of, calculate_padding
+from structlib.protocols.typedef import (
+    TypeDefSizable,
+    TypeDefAlignable,
+    align_of,
+    TypeDefSizableAndAlignable,
+    size_of,
+    native_size_of,
+    calculate_padding,
+)
 from structlib.typedefs.array import AnyPackableTypeDef
 
 
@@ -44,13 +52,19 @@ class Struct(StructPackableABC, TypeDefSizableABC, TypeDefAlignableABC):
             written = 0
             buffer = bytearray(size_of(self))
             for arg, t in zip(args, self._types):
-                packed = nested_pack(t, arg)  # TODO; check if this fails when t is Struct because Tuple/List is wrapped
-                written += bufferio.write(buffer, packed, align_of(t), written, origin=0)
+                packed = nested_pack(
+                    t, arg
+                )  # TODO; check if this fails when t is Struct because Tuple/List is wrapped
+                written += bufferio.write(
+                    buffer, packed, align_of(t), written, origin=0
+                )
             return buffer
         else:
             with BytesIO() as stream:
                 for arg, t in zip(args, self._types):
-                    packed = nested_pack(t, arg)  # TODO; check if this fails when t is Struct because Tuple/List is wrapped
+                    packed = nested_pack(
+                        t, arg
+                    )  # TODO; check if this fails when t is Struct because Tuple/List is wrapped
                     streamio.write(stream, packed, align_of(t), origin=0)
                 stream.seek(0)
                 return stream.read()
@@ -64,7 +78,11 @@ class Struct(StructPackableABC, TypeDefSizableABC, TypeDefAlignableABC):
             total_read += read
         return tuple(results)
 
-    def __init__(self, *types: Union[AnyPackableTypeDef, AnyPackableTypeDef], alignment: int = None):
+    def __init__(
+        self,
+        *types: Union[AnyPackableTypeDef, AnyPackableTypeDef],
+        alignment: int = None,
+    ):
         if alignment is None:
             alignment = _max_align_of(*types)
         self._fixed_size = all(isinstance(t, TypeDefSizable) for t in types)
@@ -86,7 +104,9 @@ class Struct(StructPackableABC, TypeDefSizableABC, TypeDefAlignableABC):
         if self is other:
             return True
         elif isinstance(other, Struct):
-            return self._fixed_size == other._fixed_size and \
-                   self.__typedef_alignment__ == other.__typedef_alignment__ and \
-                   self.__typedef_native_size__ == other.__typedef_native_size__ and \
-                   self._types == other._types
+            return (
+                self._fixed_size == other._fixed_size
+                and self.__typedef_alignment__ == other.__typedef_alignment__
+                and self.__typedef_native_size__ == other.__typedef_native_size__
+                and self._types == other._types
+            )

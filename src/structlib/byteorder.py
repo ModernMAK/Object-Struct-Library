@@ -9,7 +9,9 @@ NetworkEndian: ByteOrder = BigEndian
 NativeEndian: ByteOrder = sys.byteorder
 
 
-def resolve_byteorder(*byteorder: Optional[ByteOrder], default: ByteOrder = NativeEndian):
+def resolve_byteorder(
+    *byteorder: Optional[ByteOrder], default: ByteOrder = NativeEndian
+):
     """
     Will resolve to the first non-None byteorder, if all byteorder objects are None, default will be used.
     :param byteorder:

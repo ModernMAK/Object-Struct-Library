@@ -4,7 +4,11 @@ from copy import copy
 from typing import TypeVar
 
 from structlib.byteorder import ByteOrder
-from structlib.protocols.typedef import TypeDefAlignable, TypeDefByteOrder, TypeDefSizable
+from structlib.protocols.typedef import (
+    TypeDefAlignable,
+    TypeDefByteOrder,
+    TypeDefSizable,
+)
 
 T = TypeVar("T")
 
@@ -38,4 +42,3 @@ class TypeDefByteOrderABC(TypeDefByteOrder):
             inst = copy(self)
             inst.__typedef_byteorder__ = byteorder
             return inst
-

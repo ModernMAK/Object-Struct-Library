@@ -3,14 +3,33 @@ from typing import List, Union, Type, Any, Tuple
 
 from structlib.abc_.packing import PrimitivePackableABC, IterPackableABC
 from structlib.byteorder import ByteOrder
-from structlib.protocols.packing import iter_pack, pack_buffer, iter_unpack, unpack_buffer
-from structlib.protocols.typedef import TypeDefSizable, TypeDefAlignable, TypeDefByteOrder, byteorder_as, size_of, align_as, T
+from structlib.protocols.packing import (
+    iter_pack,
+    pack_buffer,
+    iter_unpack,
+    unpack_buffer,
+)
+from structlib.protocols.typedef import (
+    TypeDefSizable,
+    TypeDefAlignable,
+    TypeDefByteOrder,
+    byteorder_as,
+    size_of,
+    align_as,
+    T,
+)
 from structlib.utils import auto_pretty_repr, pretty_repr
 
 AnyPackableTypeDef = Any  # TODO
 
 
-class FixedCollection(PrimitivePackableABC, IterPackableABC, TypeDefSizable, TypeDefAlignable, TypeDefByteOrder):
+class FixedCollection(
+    PrimitivePackableABC,
+    IterPackableABC,
+    TypeDefSizable,
+    TypeDefAlignable,
+    TypeDefByteOrder,
+):
     @property
     def __typedef_native_size__(self) -> int:  # Native size == size for arrays
         return size_of(self._backing) * self._args
@@ -39,25 +58,28 @@ class FixedCollection(PrimitivePackableABC, IterPackableABC, TypeDefSizable, Typ
         else:
             return self
 
-    def __init__(self, args: int, data_type: Union[Type[AnyPackableTypeDef], AnyPackableTypeDef]):
+    def __init__(
+        self, args: int, data_type: Union[Type[AnyPackableTypeDef], AnyPackableTypeDef]
+    ):
         self._backing = data_type
         self._args = args
 
     @classmethod
-    def Unsized(cls:T, data_type: Union[Type[AnyPackableTypeDef], AnyPackableTypeDef]) -> T:
+    def Unsized(
+        cls: T, data_type: Union[Type[AnyPackableTypeDef], AnyPackableTypeDef]
+    ) -> T:
         """
         Helper, returns an 'unsized' Array
-        :param data_type: 
-        :return: 
+        :param data_type:
+        :return:
         """
-        return cls(0,data_type)
+        return cls(0, data_type)
 
     def __eq__(self, other):
         if self is other:
             return True
         elif isinstance(other, Array):
-            return self._args == other._args and \
-                   self._backing == other._backing
+            return self._args == other._args and self._backing == other._backing
         else:
             return False
 
@@ -77,7 +99,9 @@ class FixedCollection(PrimitivePackableABC, IterPackableABC, TypeDefSizable, Typ
             buffer = bytearray(size)
             written = 0
             for arg in args:
-                written += pack_buffer(self._backing, buffer, arg, offset=written, origin=0)
+                written += pack_buffer(
+                    self._backing, buffer, arg, offset=written, origin=0
+                )
             return buffer
 
     def unpack_prim(self, buffer: bytes) -> List:
@@ -87,7 +111,9 @@ class FixedCollection(PrimitivePackableABC, IterPackableABC, TypeDefSizable, Typ
             total_read = 0
             results = []
             for _ in range(self._args):
-                read, unpacked = unpack_buffer(self._backing, buffer, offset=total_read, origin=0)
+                read, unpacked = unpack_buffer(
+                    self._backing, buffer, offset=total_read, origin=0
+                )
                 total_read += read
                 results.append(unpacked)
             return results
@@ -99,13 +125,14 @@ class FixedCollection(PrimitivePackableABC, IterPackableABC, TypeDefSizable, Typ
 
     def iter_unpack(self, buffer: bytes, iter_count: int) -> Tuple[List, ...]:
         size = size_of(self)
-        partials = [buffer[i * size:(i + 1) * size] for i in range(iter_count)]
+        partials = [buffer[i * size : (i + 1) * size] for i in range(iter_count)]
         parts = [self.unpack_prim(partial) for partial in partials]
         return tuple(parts)
 
 
 class Array(FixedCollection):
     ...
+
 
 # It's too annoying when using typing.Tuple
 # class Tuple(FixedCollection):

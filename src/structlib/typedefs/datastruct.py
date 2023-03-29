@@ -3,13 +3,33 @@ from __future__ import annotations
 import sys
 from abc import ABCMeta, abstractmethod, ABC
 from collections import OrderedDict
-from typing import Any, TypeVar, Tuple, Optional, Dict, Type, ForwardRef, _type_check, _eval_type, Protocol, Union, runtime_checkable, _ProtocolMeta, TYPE_CHECKING
+from typing import (
+    Any,
+    TypeVar,
+    Tuple,
+    Optional,
+    Dict,
+    Type,
+    ForwardRef,
+    _type_check,
+    _eval_type,
+    Protocol,
+    Union,
+    runtime_checkable,
+    _ProtocolMeta,
+    TYPE_CHECKING,
+)
 
 from structlib.utils import classproperty
 from structlib.abc_.packing import DataclassPackableABC
 from structlib.errors import PrettyNotImplementedError
 from structlib.protocols.packing import StructPackable, DClassType, DClass
-from structlib.protocols.typedef import native_size_of, TypeDefAlignable, align_of, AttrProtocolMeta
+from structlib.protocols.typedef import (
+    native_size_of,
+    TypeDefAlignable,
+    align_of,
+    AttrProtocolMeta,
+)
 from structlib.typedefs.array import AnyPackableTypeDef
 from structlib.typedefs.structure import Struct
 
@@ -37,7 +57,9 @@ class TypeDefDataclass(Protocol):
         raise PrettyNotImplementedError(cls, cls.__typedef_tuple2dclass__)
 
 
-def eval_fwd_ref(self: ForwardRef, global_namespace, local_namespace, recursive_guard=frozenset()):
+def eval_fwd_ref(
+    self: ForwardRef, global_namespace, local_namespace, recursive_guard=frozenset()
+):
     if self.__forward_arg__ in recursive_guard:
         return self
     if not self.__forward_evaluated__ or local_namespace is not global_namespace:
@@ -49,7 +71,9 @@ def eval_fwd_ref(self: ForwardRef, global_namespace, local_namespace, recursive_
             local_namespace = global_namespace
         if self.__forward_module__ is not None:
             global_namespace = getattr(
-                sys.modules.get(self.__forward_module__, None), '__dict__', global_namespace
+                sys.modules.get(self.__forward_module__, None),
+                "__dict__",
+                global_namespace,
             )
         type_or_obj = eval(self.__forward_code__, global_namespace, local_namespace)
         try:
@@ -59,7 +83,10 @@ def eval_fwd_ref(self: ForwardRef, global_namespace, local_namespace, recursive_
                 is_argument=self.__forward_is_argument__,
             )
             self.__forward_value__ = _eval_type(
-                type_, global_namespace, local_namespace, recursive_guard | {self.__forward_arg__}
+                type_,
+                global_namespace,
+                local_namespace,
+                recursive_guard | {self.__forward_arg__},
             )
             self.__forward_evaluated__ = True
         except TypeError:
@@ -68,7 +95,9 @@ def eval_fwd_ref(self: ForwardRef, global_namespace, local_namespace, recursive_
     return self.__forward_value__
 
 
-def resolve_annotations(raw_annotations: Dict[str, Type[Any]], module_name: Optional[str]) -> Dict[str, Type[Any]]:
+def resolve_annotations(
+    raw_annotations: Dict[str, Type[Any]], module_name: Optional[str]
+) -> Dict[str, Type[Any]]:
     """
     Partially taken from typing.get_type_hints.
     Resolve string or ForwardRef annotations into types OR objects if possible.
@@ -86,7 +115,11 @@ def resolve_annotations(raw_annotations: Dict[str, Type[Any]], module_name: Opti
     annotations = {}
     for name, value in raw_annotations.items():
         if isinstance(value, str):
-            if (3, 10) > sys.version_info >= (3, 9, 8) or sys.version_info >= (3, 10, 1):
+            if (3, 10) > sys.version_info >= (3, 9, 8) or sys.version_info >= (
+                3,
+                10,
+                1,
+            ):
                 value = ForwardRef(value, is_argument=False, is_class=True)
             else:
                 value = ForwardRef(value, is_argument=False)
@@ -101,6 +134,7 @@ def resolve_annotations(raw_annotations: Dict[str, Type[Any]], module_name: Opti
 
 class TypeDefDataclassMetaclass(AttrProtocolMeta, ABCMeta, type):
     if sys.version_info < (3, 5):  # 3.5 >= is ordered by design
+
         @classmethod
         def __prepare__(cls, name, bases):
             return OrderedDict()
@@ -109,7 +143,9 @@ class TypeDefDataclassMetaclass(AttrProtocolMeta, ABCMeta, type):
         if cls.__typedef_alignment__ == alignment:
             return cls
         else:
-            new_cls = type(cls.__name__, cls.__bases__, dict(cls.__dict__), alignment=alignment)
+            new_cls = type(
+                cls.__name__, cls.__bases__, dict(cls.__dict__), alignment=alignment
+            )
             return new_cls
 
     def dclass_redefine(cls: T, annotations: Dict) -> T:
@@ -124,9 +160,17 @@ class TypeDefDataclassMetaclass(AttrProtocolMeta, ABCMeta, type):
         pairs = [f"{name}={getattr(self, name)}" for name in names]
         return f"{cls_name}({', '.join(pairs)})"
 
-    def __new__(mcs, name: str, bases: tuple[type, ...], attrs: Dict[str, Any], alignment: int = None):
+    def __new__(
+        mcs,
+        name: str,
+        bases: tuple[type, ...],
+        attrs: Dict[str, Any],
+        alignment: int = None,
+    ):
         if not bases:
-            return super().__new__(mcs, name, bases, attrs)  # Abstract Base Class; AutoStruct
+            return super().__new__(
+                mcs, name, bases, attrs
+            )  # Abstract Base Class; AutoStruct
 
         if "__str__" not in attrs:
             attrs["__str__"] = mcs.dclass_str
@@ -134,22 +178,32 @@ class TypeDefDataclassMetaclass(AttrProtocolMeta, ABCMeta, type):
             attrs["__repr__"] = mcs.dclass_str
 
         attrs["__typedef_align_as__"] = classmethod(mcs.dclass_align_as)
-        attrs["__typedef_alignment__"] = classproperty(lambda self: align_of(self.__typedef_dclass_struct_packable__))
+        attrs["__typedef_alignment__"] = classproperty(
+            lambda self: align_of(self.__typedef_dclass_struct_packable__)
+        )
 
         attrs["__typedef_dclass_redefine__"] = classmethod(mcs.dclass_redefine)
-        type_hints = resolve_annotations(attrs.get("__annotations__", {}), attrs.get("__module__"))
+        type_hints = resolve_annotations(
+            attrs.get("__annotations__", {}), attrs.get("__module__")
+        )
         typed_attr = {name: typing for name, typing in type_hints.items()}
         ordered_attr = [name for name in type_hints.keys() if name in typed_attr]
         ordered_structs = [type_hints[attr] for attr in typed_attr]
-        attrs["__typedef_dclass_struct_packable__"] = Struct(*ordered_structs, alignment=alignment)
+        attrs["__typedef_dclass_struct_packable__"] = Struct(
+            *ordered_structs, alignment=alignment
+        )
         attrs["__typedef_dclass_name2type_lookup__"] = typed_attr
         attrs["__typedef_dclass_name_order__"] = tuple(ordered_attr)
 
-        attrs["__typedef_native_size__"] = classproperty(lambda self: native_size_of(self.__typedef_dclass_struct_packable__))
+        attrs["__typedef_native_size__"] = classproperty(
+            lambda self: native_size_of(self.__typedef_dclass_struct_packable__)
+        )
         return super().__new__(mcs, name, bases, attrs)
 
 
-def dclass2tuple(t: Union[Type[TypeDefDataclass], Any], v: Union[TypeDefDataclass, T]) -> Union[Tuple[Any, ...], T]:
+def dclass2tuple(
+    t: Union[Type[TypeDefDataclass], Any], v: Union[TypeDefDataclass, T]
+) -> Union[Tuple[Any, ...], T]:
     if isinstance(t, TypeDefDataclass):
         return v.__typedef_dclass2tuple__()
     else:
@@ -163,7 +217,12 @@ def tuple2dclass(t: Type[TypeDefDataclass], v: Union[Tuple[Any, ...], T]):
         return v
 
 
-class TypeDefDataclassABC(DataclassPackableABC, TypeDefAlignable, TypeDefDataclass, metaclass=TypeDefDataclassMetaclass):
+class TypeDefDataclassABC(
+    DataclassPackableABC,
+    TypeDefAlignable,
+    TypeDefDataclass,
+    metaclass=TypeDefDataclassMetaclass,
+):
     def __typedef_align_as__(self: T, alignment: int) -> T:
         raise PrettyNotImplementedError(self, self.__typedef_align_as__)
 
@@ -203,7 +262,12 @@ class TypeDefDataclassABC(DataclassPackableABC, TypeDefAlignable, TypeDefDatacla
         return tuple2dclass(cls, args)
 
 
-class TypeDefDataclassABC(DataclassPackableABC, TypeDefAlignable, TypeDefDataclass, metaclass=TypeDefDataclassMetaclass):
+class TypeDefDataclassABC(
+    DataclassPackableABC,
+    TypeDefAlignable,
+    TypeDefDataclass,
+    metaclass=TypeDefDataclassMetaclass,
+):
     @classmethod
     def __typedef_dclass_redefine__(cls, annotations_: Dict[str, Any]):
         raise PrettyNotImplementedError(cls, cls.__typedef_dclass_redefine__)

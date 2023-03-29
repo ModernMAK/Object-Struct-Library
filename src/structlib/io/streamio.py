@@ -32,7 +32,9 @@ def write(stream: BinaryIO, data: bytes, alignment: int, origin: int = 0) -> int
     return prefix_padding + data_size + postfix_padding
 
 
-def read(stream: BinaryIO, data_size: int, alignment: int, origin: int = 0) -> Tuple[int, bytes]:
+def read(
+    stream: BinaryIO, data_size: int, alignment: int, origin: int = 0
+) -> Tuple[int, bytes]:
     offset = stream_offset_from_origin(stream, origin)
 
     prefix_padding = calculate_padding(alignment, offset)

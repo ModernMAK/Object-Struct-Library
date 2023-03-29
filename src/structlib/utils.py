@@ -4,7 +4,9 @@ from structlib.byteorder import ByteOrder
 from structlib.typing_ import ReadableBuffer
 
 
-def generate_chunks_from_buffer(buffer: ReadableBuffer, count: int, chunk_size: int, offset: int = 0):
+def generate_chunks_from_buffer(
+    buffer: ReadableBuffer, count: int, chunk_size: int, offset: int = 0
+):
     """
     Useful for splitting a buffer into fixed-sized chunks.
     :param buffer: The buffer to read from
@@ -14,7 +16,7 @@ def generate_chunks_from_buffer(buffer: ReadableBuffer, count: int, chunk_size: 
     :return: A generator returning each chunk as bytes
     """
     for _ in range(count):
-        yield buffer[offset + _ * chunk_size:offset + (_ + 1) * chunk_size]
+        yield buffer[offset + _ * chunk_size : offset + (_ + 1) * chunk_size]
 
 
 def pretty_repr(_repr, msg) -> str:
@@ -39,8 +41,8 @@ def auto_pretty_repr(self) -> str:
 
 
 def pretty_str(name: str, endian: ByteOrder, alignment: Optional[int]):
-    str_endian = f'{endian[0]}e'  # HACK, _byteorder should be one of the literals 'l'ittle or 'b'ig
-    str_align = f'-@{alignment}' if alignment is None else ''
+    str_endian = f"{endian[0]}e"  # HACK, _byteorder should be one of the literals 'l'ittle or 'b'ig
+    str_align = f"-@{alignment}" if alignment is None else ""
     return f"{name}-{str_endian}{str_align}"
 
 
@@ -65,6 +67,8 @@ class ClassProperty(object):
 classproperty = ClassProperty  # Alias for decorator
 
 
-def dataclass_str_format(cls_name: str, attrs: Union[OrderedDict[str, Any],Dict[str,Any]]):
+def dataclass_str_format(
+    cls_name: str, attrs: Union[OrderedDict[str, Any], Dict[str, Any]]
+):
     pairs = [f"{name}={value}" for name, value in attrs.items()]
     return f"{cls_name}({', '.join(pairs)})"

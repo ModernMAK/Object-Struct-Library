@@ -6,7 +6,9 @@ from structlib.protocols.typedef import calculate_padding
 from structlib.typing_ import WritableBuffer, ReadableBuffer
 
 
-def write(buffer: WritableBuffer, data: bytes, alignment: int, offset: int, origin: int = 0) -> int:
+def write(
+    buffer: WritableBuffer, data: bytes, alignment: int, offset: int, origin: int = 0
+) -> int:
     """
     Writes data to a buffer, aligned to the `alignment boundaries` defined by alignment & origin
 
@@ -27,7 +29,7 @@ def write(buffer: WritableBuffer, data: bytes, alignment: int, offset: int, orig
     postfix_offset = offset + prefix_padding + data_size
 
     apply_padding_to_buffer(buffer, prefix_padding, offset, origin)
-    buffer[buffer_offset:buffer_offset + data_size] = data
+    buffer[buffer_offset : buffer_offset + data_size] = data
     apply_padding_to_buffer(buffer, postfix_padding, postfix_offset, origin)
 
     return prefix_padding + data_size + postfix_padding
@@ -42,20 +44,31 @@ def pad_data_to_boundary(data: bytes, alignment: int) -> bytes:
     return data
 
 
-def read(buffer: ReadableBuffer, data_size: int, alignment: int, offset: int, origin: int = 0) -> Tuple[int, bytes]:
+def read(
+    buffer: ReadableBuffer, data_size: int, alignment: int, offset: int, origin: int = 0
+) -> Tuple[int, bytes]:
     prefix_padding = calculate_padding(alignment, offset)
     buffer_offset = origin + offset + prefix_padding
     postfix_offset = offset + prefix_padding + data_size
     postfix_padding = calculate_padding(alignment, postfix_offset)
 
-    return prefix_padding + data_size + postfix_padding, buffer[buffer_offset:buffer_offset + data_size]
+    return (
+        prefix_padding + data_size + postfix_padding,
+        buffer[buffer_offset : buffer_offset + data_size],
+    )
 
 
-def create_padding_buffer(padding: int, pad_value:int=0) -> bytes:
+def create_padding_buffer(padding: int, pad_value: int = 0) -> bytes:
     return bytes([pad_value] * padding)
 
 
-def apply_padding_to_buffer(buffer: WritableBuffer, padding: int, offset: int, origin: int = 0, pad_value:int=0):
+def apply_padding_to_buffer(
+    buffer: WritableBuffer,
+    padding: int,
+    offset: int,
+    origin: int = 0,
+    pad_value: int = 0,
+):
     # TypeError: 'bytes' object does not support item assignment ~ use bytearray instead
-    pad_buffer = create_padding_buffer(padding,pad_value=pad_value)
-    buffer[origin + offset:origin + offset + padding] = pad_buffer
+    pad_buffer = create_padding_buffer(padding, pad_value=pad_value)
+    buffer[origin + offset : origin + offset + padding] = pad_buffer
