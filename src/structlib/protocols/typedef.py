@@ -5,11 +5,11 @@ from typing import (
     Union,
     Protocol,
     TypeVar,
-    ClassVar,
     runtime_checkable,
     _ProtocolMeta,
     _is_callable_members_only,
     _get_protocol_attrs,
+    Type,
 )
 
 from structlib.byteorder import ByteOrder, resolve_byteorder
@@ -45,7 +45,22 @@ class AttrProtocolMeta(_ProtocolMeta):
 
 
 @runtime_checkable
+class TypeDefAnnotated(Protocol, metaclass=AttrProtocolMeta):
+    """
+    The typedef represents a pythonic type
+    """
+
+    @property
+    def __typedef_annotation__(self) -> Type:
+        raise PrettyNotImplementedError(self, self.__typedef_annotation__)
+
+
+@runtime_checkable
 class TypeDefSizable(Protocol, metaclass=AttrProtocolMeta):
+    """
+    The type defines a native_size
+    """
+
     __typedef_native_size__: int
 
 
@@ -93,7 +108,7 @@ def size_of(typedef: TypeDefSizable):
 
 @runtime_checkable
 class TypeDefByteOrder(Protocol):
-    __typedef_byteorder__: ClassVar[ByteOrder]
+    __typedef_byteorder__: ByteOrder
 
     @abstractmethod
     def __typedef_byteorder_as__(self: T, byteorder: ByteOrder) -> T:
@@ -118,7 +133,7 @@ def calculate_padding(alignment: int, size_or_offset: int) -> int:
     """
     Calculates the padding required to align a buffer to a boundary.
 
-    This function works for both sizes and offsets, but its result means something different depending on whether it was given a size or an offset.
+    This function works for both sizes and offsets.
     If using a size; the padding is the padding required to align the type to the end of it's next `over aligned` boundary (suffix padding).
     If using an offset; the padding required to align the type to the start of its next `over aligned` boundary (prefix padding).
 

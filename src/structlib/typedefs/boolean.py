@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Tuple, Type
 
 from structlib.abc_.packing import IterPackableABC, PrimitivePackableABC
 from structlib.abc_.typedef import TypeDefSizableABC, TypeDefAlignableABC
@@ -15,6 +15,10 @@ class BooleanDefinition(
     TRUE_BUF = bytes([TRUE])
     FALSE = 0x00
     FALSE_BUF = bytes([FALSE])
+    @property
+    def __typedef_annotation__(self) -> Type:
+        return bool
+
 
     def __init__(self, *, alignment: int = None):
         """

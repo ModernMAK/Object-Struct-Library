@@ -5,7 +5,7 @@ from typing import Any, Union, Tuple
 
 from structlib.abc_.packing import StructPackableABC
 from structlib.abc_.typedef import TypeDefAlignableABC, TypeDefSizableABC
-from structlib.io import bufferio, streamio
+from structlib.io_ import bufferio, streamio
 from structlib.protocols.packing import nested_pack, unpack_buffer
 from structlib.protocols.typedef import (
     TypeDefSizable,
@@ -48,6 +48,10 @@ def _combined_size(*types: TypeDefSizableAndAlignable):
 
 class Struct(StructPackableABC, TypeDefSizableABC, TypeDefAlignableABC):
     def struct_pack(self, *args: Any) -> bytes:
+        # TODO; packed result does not account for struct alingment
+        #   EG. if the data is packed into 13 bytes, with an alignment of 4 on the struct, we should pad to 16 bytes
+        #   THIS ONLY HAPPENS FOR NON-FIXED STRUCTURES!
+
         if self._fixed_size:
             written = 0
             buffer = bytearray(size_of(self))
@@ -66,6 +70,8 @@ class Struct(StructPackableABC, TypeDefSizableABC, TypeDefAlignableABC):
                         t, arg
                     )  # TODO; check if this fails when t is Struct because Tuple/List is wrapped
                     streamio.write(stream, packed, align_of(t), origin=0)
+                suffix_padding = bufferio.create_padding_buffer(calculate_padding(align_of(self),stream.tell()))
+                stream.write(suffix_padding)
                 stream.seek(0)
                 return stream.read()
 
@@ -93,6 +99,7 @@ class Struct(StructPackableABC, TypeDefSizableABC, TypeDefAlignableABC):
             except:  # TODO narrow exception
                 # delattr(self, "__typedef_native_size__")
                 ...
+                raise
         else:
             ...
             # delattr(self, "__typedef_native_size__")

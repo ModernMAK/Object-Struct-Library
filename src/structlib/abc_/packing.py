@@ -1,6 +1,7 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import Tuple, BinaryIO, Any
-from structlib.io import bufferio, streamio
+
+from structlib.io_ import bufferio, streamio
 from structlib.protocols.packing import (
     Packable,
     IterPackable,
@@ -17,7 +18,6 @@ from structlib.protocols.typedef import (
     size_of,
     TypeDefAlignable,
     TypeDefSizable,
-    T,
 )
 from structlib.typing_ import (
     WritableBuffer,

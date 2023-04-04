@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Any, Tuple
+from typing import List, Any, Tuple, Type
 
 from structlib.abc_.packing import IterPackableABC, PrimitivePackableABC
 from structlib.abc_.typedef import (
@@ -14,7 +14,7 @@ from structlib.protocols.typedef import (
     native_size_of,
     byteorder_of,
     align_of,
-    calculate_padding,
+    calculate_padding, TypeDefAnnotated,
 )
 from structlib.utils import default_if_none, pretty_str, auto_pretty_repr
 
@@ -25,7 +25,12 @@ class IntegerDefinition(
     TypeDefSizableABC,
     TypeDefAlignableABC,
     TypeDefByteOrderABC,
+    TypeDefAnnotated,
 ):
+    @property
+    def __typedef_annotation__(self) -> Type:
+        return int
+
     def _to_bytes(self, *args: int):
         native_size = native_size_of(self)
         byteorder = byteorder_of(self)

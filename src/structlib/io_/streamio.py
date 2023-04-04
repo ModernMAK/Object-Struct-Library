@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import BinaryIO, Tuple
 
-from structlib.io.bufferio import create_padding_buffer
+from structlib.io_.bufferio import create_padding_buffer
 from structlib.protocols.typedef import calculate_padding
 
 

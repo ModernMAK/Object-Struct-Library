@@ -5,7 +5,7 @@ from typing import Tuple, Any
 from structlib.abc_.packing import IterPackableABC
 from structlib.abc_.typedef import TypeDefAlignableABC
 from structlib.errors import PrettyNotImplementedError
-from structlib.io import bufferio, streamio
+from structlib.io_ import bufferio, streamio
 from structlib.protocols.packing import TPrim, PrimitivePackable
 from structlib.protocols.typedef import align_of
 from structlib.typedefs.integer import IntegerDefinition

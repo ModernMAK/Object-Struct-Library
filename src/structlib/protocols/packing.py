@@ -78,6 +78,7 @@ TPrim = TypeVar("TPrim")
 TPrimTuple = Tuple[TPrim, ...]
 
 
+# TODO RENAME TO PACKABLE
 @runtime_checkable
 class PrimitivePackable(Protocol[TPrim]):
     @abstractmethod
@@ -118,6 +119,9 @@ DClassType = Type[DClass]
 DClassTuple = Tuple[DClass, ...]
 
 
+# TODO DEPRECATE
+#   Dataclass should not be considered a packable; it is too exotic/complicated
+#   Instead, rely on a special __typedef_struct__ field that is auto-addd to DataClass
 @runtime_checkable
 class DataclassPackable(Protocol):
     @abstractmethod
@@ -154,6 +158,10 @@ class DataclassPackable(Protocol):
         raise PrettyNotImplementedError(cls, cls.dclass_unpack_stream)
 
 
+# TODO Consider deprecating?
+#   The only case that is weird that I think is okay; constants
+#   MAGIC, explicit padding, or sentinels shouldn't need to be assigned
+#   It does complicate things because it doesn't accept pack arguments like Packable does
 @runtime_checkable
 class ConstPackable(Protocol):
     """
@@ -193,6 +201,9 @@ class ConstPackable(Protocol):
         raise PrettyNotImplementedError(self, self.const_unpack_stream)
 
 
+# TODO DEPRECATE
+#   Packable should always accept one argument to pack
+#   Struct Packable is just PrimPack accepting a tuple
 @runtime_checkable
 class StructPackable(Protocol):
     @abstractmethod
@@ -241,6 +252,7 @@ def PrettyTypeError(self, proto):
 AnyPackable = Union[Packable, StructPackable, PrimitivePackable, DataclassPackable]
 
 
+# TODO depricate
 @runtime_checkable
 class DataclassIterPackable(Protocol):
     @classmethod
@@ -287,6 +299,9 @@ class DataclassIterPackable(Protocol):
         cls: DClassType, stream: ReadableStream, iter_count: int, *, origin: int
     ) -> Tuple[int, DClassTuple]:
         raise PrettyNotImplementedError(cls, cls.iter_dclass_unpack_stream)
+
+
+# TODO fix or remove
 
 
 @runtime_checkable
