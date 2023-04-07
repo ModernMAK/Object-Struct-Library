@@ -3,7 +3,7 @@ from typing import Any, List
 
 from tests.typedefs.util import classproperty
 from structlib.byteorder import ByteOrder, resolve_byteorder, NativeEndian, NetworkEndian, BigEndian, LittleEndian
-from structlib.protocols.typedef import byteorder_as, byteorder_of, TypeDefByteOrder
+from structlib.typedef import TypeDefByteOrder, byteorder_of, byteorder_as
 
 
 # AVOID using test as prefix

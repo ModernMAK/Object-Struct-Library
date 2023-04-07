@@ -4,8 +4,8 @@ from tests import rng
 from tests.typedefs.common_tests import AlignmentTests, DefinitionTests, ByteorderTests, PrimitiveTests, Sample2Bytes
 from tests.typedefs.util import classproperty
 from structlib.byteorder import ByteOrder, resolve_byteorder, NetworkEndian, LittleEndian, NativeEndian, BigEndian
-from structlib.protocols.packing import Packable
-from structlib.protocols.typedef import TypeDefAlignable, TypeDefByteOrder
+from structlib.packing import Packable
+from structlib.typedef import TypeDefAlignable, TypeDefByteOrder
 from structlib.typedefs import integer as _integer
 from structlib.typedefs.integer import IntegerDefinition
 from structlib.utils import default_if_none

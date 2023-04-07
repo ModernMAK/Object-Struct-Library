@@ -1,9 +1,10 @@
 from abc import ABC
 from typing import List, Any, Tuple
 
+import structlib.packing
 from structlib.byteorder import ByteOrder, NativeEndian
-from structlib.protocols.packing import Packable
-from structlib.protocols.typedef import TypeDefAlignable, native_size_of, align_of
+from structlib.packing import Packable
+from structlib.typedef import native_size_of, TypeDefAlignable, align_of
 from structlib.typedefs import integer, floating
 from structlib.typedefs.floating import FloatDefinition
 from structlib.typedefs.structure import Struct

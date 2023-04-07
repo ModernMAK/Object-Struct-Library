@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import BinaryIO, Tuple
 
-from structlib.io_.bufferio import create_padding_buffer
-from structlib.protocols.typedef import calculate_padding
+from structlib.bufferio import create_padding_buffer
+from structlib.typedef import calculate_padding
 
 
 def write(stream: BinaryIO, data: bytes, alignment: int, origin: int = 0) -> int:

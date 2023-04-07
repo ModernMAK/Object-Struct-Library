@@ -2,25 +2,23 @@ from __future__ import annotations
 
 from typing import List, Any, Tuple, Type
 
-from structlib.abc_.packing import IterPackableABC, PrimitivePackableABC
-from structlib.abc_.typedef import (
+from structlib.packing import IterPackableABC, PackableABC, T
+from structlib.typedef import (
     TypeDefAlignableABC,
     TypeDefByteOrderABC,
     TypeDefSizableABC,
+    TypeDefAnnotated,
+    native_size_of,
+    align_of,
+    byteorder_of,
+    calculate_padding,
 )
 from structlib.byteorder import ByteOrder, resolve_byteorder
-from structlib.protocols.packing import TPrim
-from structlib.protocols.typedef import (
-    native_size_of,
-    byteorder_of,
-    align_of,
-    calculate_padding, TypeDefAnnotated,
-)
 from structlib.utils import default_if_none, pretty_str, auto_pretty_repr
 
 
 class IntegerDefinition(
-    PrimitivePackableABC,
+    PackableABC,
     IterPackableABC,
     TypeDefSizableABC,
     TypeDefAlignableABC,
@@ -60,7 +58,7 @@ class IntegerDefinition(
         ]
         return results
 
-    def prim_pack(self, arg: TPrim) -> bytes:
+    def prim_pack(self, arg: T) -> bytes:
         return self._to_bytes(arg)
 
     def unpack_prim(self, buffer: bytes) -> int:

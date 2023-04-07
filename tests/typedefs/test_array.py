@@ -1,12 +1,14 @@
 from abc import ABC
 from typing import List, Literal, Any
 
+import structlib.packing
 from tests import rng
 from tests.typedefs.common_tests import AlignmentTests, DefinitionTests, ByteorderTests, PrimitiveTests, Sample2Bytes
 from tests.typedefs.util import classproperty
 from structlib.byteorder import ByteOrder, resolve_byteorder, NativeEndian, BigEndian, LittleEndian, NetworkEndian
-from structlib.protocols.packing import PrimitivePackable
-from structlib.protocols.typedef import TypeDefAlignable, align_of, native_size_of, byteorder_of, TypeDefByteOrder, byteorder_as, calculate_padding
+from structlib.packing import PrimitivePackable
+from structlib.typedef import native_size_of, TypeDefAlignable, align_of, TypeDefByteOrder, byteorder_of, byteorder_as, \
+    calculate_padding
 from structlib.typedefs import integer, floating
 from structlib.typedefs.array import Array
 from structlib.typedefs.floating import FloatDefinition

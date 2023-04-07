@@ -2,12 +2,10 @@ from abc import abstractmethod
 from io import BytesIO
 from typing import Tuple, Any
 
-from structlib.abc_.packing import IterPackableABC
-from structlib.abc_.typedef import TypeDefAlignableABC
+from structlib.packing import IterPackableABC, T, PrimitivePackable
+from structlib.typedef import TypeDefAlignableABC, align_of
 from structlib.errors import PrettyNotImplementedError
-from structlib.io_ import bufferio, streamio
-from structlib.protocols.packing import TPrim, PrimitivePackable
-from structlib.protocols.typedef import align_of
+from structlib import streamio, bufferio
 from structlib.typedefs.integer import IntegerDefinition
 from structlib.typing_ import (
     ReadableStream,
@@ -27,7 +25,7 @@ class LengthPrefixedPrimitiveABC(
     """
 
     @abstractmethod
-    def _internal_pack(self, arg: TPrim) -> bytes:
+    def _internal_pack(self, arg: T) -> bytes:
         """
         Should return the arg as a byte packed value (excluding the prefixed size).
         :param arg:
@@ -36,7 +34,7 @@ class LengthPrefixedPrimitiveABC(
         raise PrettyNotImplementedError(self, self._internal_pack)
 
     @abstractmethod
-    def _internal_unpack(self, buffer: bytes) -> TPrim:
+    def _internal_unpack(self, buffer: bytes) -> T:
         """
         Buffer is guaranteed to be the N bytes specified by the prefixed size, padding and the prefixed size are not included
         :param buffer:
@@ -64,7 +62,7 @@ class LengthPrefixedPrimitiveABC(
         self._size_type = size_type
         self._block_size = default_if_none(block_size, 1)
 
-    def prim_pack(self, arg: TPrim) -> bytes:
+    def prim_pack(self, arg: T) -> bytes:
         packed = self._internal_pack(arg)
         block_count = self.__size2block_count(len(packed))
         size_packed = self._size_type.prim_pack(block_count)
@@ -74,25 +72,25 @@ class LengthPrefixedPrimitiveABC(
         return b"".join([size_packed, aligned_packed])
 
     def prim_pack_buffer(
-        self, buffer: WritableBuffer, arg: TPrim, *, offset: int = 0, origin: int = 0
+        self, buffer: WritableBuffer, arg: T, *, offset: int = 0, origin: int = 0
     ) -> int:
         packed = self.prim_pack(arg)
         alignment = align_of(self)
         return bufferio.write(buffer, packed, alignment, offset=offset, origin=origin)
 
     def prim_pack_stream(
-        self, stream: WritableStream, arg: TPrim, *, origin: int = 0
+        self, stream: WritableStream, arg: T, *, origin: int = 0
     ) -> int:
         packed = self.prim_pack(arg)
         alignment = align_of(self)
         return streamio.write(stream, packed, alignment, origin=origin)
 
-    def unpack_prim(self, buffer: bytes) -> TPrim:
+    def unpack_prim(self, buffer: bytes) -> T:
         return self.unpack_prim_buffer(buffer)[1]
 
     def unpack_prim_buffer(
         self, buffer: ReadableBuffer, *, offset: int = 0, origin: int = 0
-    ) -> Tuple[int, TPrim]:
+    ) -> Tuple[int, T]:
         read, block_count = self._size_type.unpack_prim_buffer(
             buffer, offset=offset, origin=origin
         )
@@ -105,7 +103,7 @@ class LengthPrefixedPrimitiveABC(
 
     def unpack_prim_stream(
         self, stream: ReadableStream, *, origin: int = 0
-    ) -> Tuple[int, TPrim]:
+    ) -> Tuple[int, T]:
         read, block_count = self._size_type.unpack_prim_stream(stream, origin=origin)
         var_size = self.__block_count2size(block_count)
         alignment = align_of(self)
@@ -114,7 +112,7 @@ class LengthPrefixedPrimitiveABC(
         )  # var_read includes extra bytes read for alignment padding!
         return read + var_read, self._internal_unpack(var_buffer)
 
-    def iter_pack(self, *args: TPrim) -> bytes:
+    def iter_pack(self, *args: T) -> bytes:
         with BytesIO() as stream:
             self.iter_pack_stream(stream, *args, origin=0)
             stream.seek(0)
@@ -136,7 +134,7 @@ class LengthPrefixedPrimitiveABC(
             total_written += self.prim_pack_stream(stream, arg, origin=origin)
         return total_written
 
-    def iter_unpack(self, buffer: bytes, iter_count: int) -> Tuple[TPrim, ...]:
+    def iter_unpack(self, buffer: bytes, iter_count: int) -> Tuple[T, ...]:
         results = []
         total_read = 0
         for _ in range(iter_count):
@@ -152,7 +150,7 @@ class LengthPrefixedPrimitiveABC(
         *,
         offset: int = 0,
         origin: int = 0
-    ) -> Tuple[int, Tuple[TPrim, ...]]:
+    ) -> Tuple[int, Tuple[T, ...]]:
         results = []
         total_read = 0
         for _ in range(iter_count):
@@ -165,7 +163,7 @@ class LengthPrefixedPrimitiveABC(
 
     def iter_unpack_stream(
         self, stream: ReadableStream, iter_count: int, *, origin: int
-    ) -> Tuple[int, Tuple[TPrim, ...]]:
+    ) -> Tuple[int, Tuple[T, ...]]:
         results = []
         total_read = 0
         for _ in range(iter_count):

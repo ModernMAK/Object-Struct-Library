@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 from abc import abstractmethod
+from copy import copy
 from typing import (
-    Union,
-    Protocol,
     TypeVar,
     runtime_checkable,
+    Protocol,
+    Type,
+    Union,
     _ProtocolMeta,
     _is_callable_members_only,
     _get_protocol_attrs,
-    Type,
 )
 
 from structlib.byteorder import ByteOrder, resolve_byteorder
@@ -17,9 +18,6 @@ from structlib.errors import PrettyNotImplementedError
 
 T = TypeVar("T")
 
-
-# Because _abc_instancecheck is returning True, runtime_checkable is useless; to get around this, we don't fallback to ABC in this custom metaclass
-#   Unfortunately, this means that if protocol recieves updates; this will become outdated
 class AttrProtocolMeta(_ProtocolMeta):
     # the lack of __instancehook__.
     def __instancecheck__(cls, instance):
@@ -45,14 +43,25 @@ class AttrProtocolMeta(_ProtocolMeta):
 
 
 @runtime_checkable
-class TypeDefAnnotated(Protocol, metaclass=AttrProtocolMeta):
-    """
-    The typedef represents a pythonic type
-    """
+class TypeDefAlignable(Protocol):
+    __typedef_alignment__: int
 
-    @property
-    def __typedef_annotation__(self) -> Type:
-        raise PrettyNotImplementedError(self, self.__typedef_annotation__)
+    @abstractmethod
+    def __typedef_align_as__(self: T, alignment: int) -> T:
+        raise PrettyNotImplementedError(self, self.__typedef_align_as__)
+
+
+class TypeDefAlignableABC(TypeDefAlignable):
+    def __init__(self, alignment: int):
+        self.__typedef_alignment__ = alignment
+
+    def __typedef_align_as__(self: T, alignment: int) -> T:
+        if self.__typedef_alignment__ == alignment:
+            return self
+        else:
+            inst = copy(self)
+            inst.__typedef_alignment__ = alignment
+            return inst
 
 
 @runtime_checkable
@@ -64,17 +73,48 @@ class TypeDefSizable(Protocol, metaclass=AttrProtocolMeta):
     __typedef_native_size__: int
 
 
-def native_size_of(typedef: TypeDefSizable):
-    return typedef.__typedef_native_size__
+class TypeDefSizableABC(TypeDefSizable):
+    def __init__(self, native_size: int):
+        self.__typedef_native_size__ = native_size
 
 
 @runtime_checkable
-class TypeDefAlignable(Protocol):
-    __typedef_alignment__: int
+class TypeDefByteOrder(Protocol):
+    __typedef_byteorder__: ByteOrder
 
     @abstractmethod
-    def __typedef_align_as__(self: T, alignment: int) -> T:
-        raise PrettyNotImplementedError(self, self.__typedef_align_as__)
+    def __typedef_byteorder_as__(self: T, byteorder: ByteOrder) -> T:
+        raise PrettyNotImplementedError(self, self.__typedef_byteorder_as__)
+
+
+class TypeDefByteOrderABC(TypeDefByteOrder):
+    def __init__(self, byteorder: ByteOrder):
+        self.__typedef_byteorder__ = byteorder
+
+    def __typedef_byteorder_as__(self: T, byteorder: ByteOrder) -> T:
+        if self.__typedef_byteorder__ == byteorder:
+            return self
+        else:
+            inst = copy(self)
+            inst.__typedef_byteorder__ = byteorder
+            return inst
+
+
+
+
+@runtime_checkable
+class TypeDefAnnotated(Protocol, metaclass=AttrProtocolMeta):
+    """
+    The typedef represents a pythonic type
+    """
+
+    @property
+    def __typedef_annotation__(self) -> Type:
+        raise PrettyNotImplementedError(self, self.__typedef_annotation__)
+
+
+def native_size_of(typedef: TypeDefSizable):
+    return typedef.__typedef_native_size__
 
 
 def align_of(typedef: TypeDefAlignable) -> int:
@@ -104,15 +144,6 @@ def size_of(typedef: TypeDefSizable):
         alignment = align_of(typedef)
         padding = calculate_padding(alignment, native_size)
     return native_size + padding
-
-
-@runtime_checkable
-class TypeDefByteOrder(Protocol):
-    __typedef_byteorder__: ByteOrder
-
-    @abstractmethod
-    def __typedef_byteorder_as__(self: T, byteorder: ByteOrder) -> T:
-        raise PrettyNotImplementedError(self, self.__typedef_byteorder_as__)
 
 
 def byteorder_of(typedef: TypeDefByteOrder) -> ByteOrder:

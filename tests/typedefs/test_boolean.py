@@ -1,8 +1,8 @@
 from typing import List, Any
 
 from structlib.byteorder import ByteOrder
-from structlib.protocols.packing import PrimitivePackable
-from structlib.protocols.typedef import TypeDefAlignable
+from structlib.packing import PrimitivePackable
+from structlib.typedef import TypeDefAlignable
 from structlib.typedefs import boolean
 from structlib.typedefs.boolean import BooleanDefinition
 from tests import rng

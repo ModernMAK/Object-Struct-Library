@@ -1,22 +1,25 @@
 from __future__ import annotations
 
 from io import BytesIO
-from typing import Any, Union, Tuple
+from typing import Any, Union, Tuple, BinaryIO
 
-from structlib.abc_.packing import StructPackableABC
-from structlib.abc_.typedef import TypeDefAlignableABC, TypeDefSizableABC
-from structlib.io_ import bufferio, streamio
-from structlib.protocols.packing import nested_pack, unpack_buffer
-from structlib.protocols.typedef import (
+from structlib.packing import PackableABC, nested_pack, unpack_buffer
+
+# from structlib.abc_.packing import StructPackableABC
+from structlib.typedef import (
+    TypeDefAlignableABC,
+    TypeDefSizableABC,
     TypeDefSizable,
+    native_size_of,
     TypeDefAlignable,
     align_of,
     TypeDefSizableAndAlignable,
     size_of,
-    native_size_of,
     calculate_padding,
 )
+from structlib import streamio, bufferio
 from structlib.typedefs.array import AnyPackableTypeDef
+from structlib.typing_ import WritableBuffer, ReadableBuffer
 
 
 def _max_align_of(*types: TypeDefAlignable):
@@ -46,9 +49,9 @@ def _combined_size(*types: TypeDefSizableAndAlignable):
     return size
 
 
-class Struct(StructPackableABC, TypeDefSizableABC, TypeDefAlignableABC):
-    def struct_pack(self, *args: Any) -> bytes:
-        # TODO; packed result does not account for struct alingment
+class Struct(PackableABC[Tuple], TypeDefSizableABC, TypeDefAlignableABC):
+    def prim_pack(self, args: Tuple) -> bytes:
+        # TODO; packed result does not account for struct alignment
         #   EG. if the data is packed into 13 bytes, with an alignment of 4 on the struct, we should pad to 16 bytes
         #   THIS ONLY HAPPENS FOR NON-FIXED STRUCTURES!
 
@@ -70,12 +73,14 @@ class Struct(StructPackableABC, TypeDefSizableABC, TypeDefAlignableABC):
                         t, arg
                     )  # TODO; check if this fails when t is Struct because Tuple/List is wrapped
                     streamio.write(stream, packed, align_of(t), origin=0)
-                suffix_padding = bufferio.create_padding_buffer(calculate_padding(align_of(self),stream.tell()))
+                suffix_padding = bufferio.create_padding_buffer(
+                    calculate_padding(align_of(self), stream.tell())
+                )
                 stream.write(suffix_padding)
                 stream.seek(0)
                 return stream.read()
 
-    def struct_unpack(self, buffer: bytes) -> Tuple[Any, ...]:
+    def unpack_prim(self, buffer: bytes) -> Tuple:
         total_read = 0
         results = []
         for t in self._types:
@@ -83,6 +88,34 @@ class Struct(StructPackableABC, TypeDefSizableABC, TypeDefAlignableABC):
             results.append(result)
             total_read += read
         return tuple(results)
+
+    def prim_pack_buffer(
+        self, buffer: WritableBuffer, args: Tuple, *, offset: int = 0, origin: int = 0
+    ) -> int:
+        packed = self.prim_pack(args)
+        alignment = align_of(self)
+        return bufferio.write(buffer, packed, alignment, offset, origin)
+
+    def prim_unpack_buffer(
+        self, buffer: ReadableBuffer, *, offset: int, origin: int
+    ) -> Tuple[int, Tuple]:
+        size = size_of(self)
+        alignment = align_of(self)
+        read, packed = bufferio.read(buffer, size, alignment, offset, origin)
+        unpacked = self.unpack_prim(packed)
+        return read, unpacked
+
+    def prim_pack_stream(self, stream: BinaryIO, *args: Any, origin: int) -> int:
+        packed = self.prim_pack(*args)
+        alignment = align_of(self)
+        return streamio.write(stream, packed, alignment, origin)
+
+    def prim_unpack_stream(self, stream: BinaryIO, *, origin: int) -> Tuple[int, Tuple]:
+        size = size_of(self)
+        alignment = align_of(self)
+        read, packed = streamio.read(stream, size, alignment, origin)
+        unpacked = self.prim_unpack(packed)
+        return read, unpacked
 
     def __init__(
         self,

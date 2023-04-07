@@ -4,8 +4,8 @@ from typing import List, Any, Callable
 
 from tests.typedefs.util import classproperty
 from structlib.byteorder import ByteOrder, NativeEndian, NetworkEndian, LittleEndian, BigEndian
-from structlib.protocols.packing import Packable
-from structlib.protocols.typedef import align_as, calculate_padding
+from structlib.packing import Packable
+from structlib.typedef import align_as, calculate_padding
 
 
 def get_empty_buffer(native_size: int, alignment: int, offset: int, origin: int) -> bytearray:

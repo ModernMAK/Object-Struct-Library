@@ -1,27 +1,23 @@
-from typing import Tuple, Any, Type
+from typing import Tuple, Type
 
-from structlib.abc_.packing import (
-    PrimitivePackableABC,
+from structlib.packing import (
+    PackableABC,
     IterPackableABC,
     ConstPackableABC,
+    T,
 )
-from structlib.abc_.typedef import TypeDefSizableABC, TypeDefAlignableABC
-from structlib.io_ import bufferio
-from structlib.protocols.packing import TPrim, DataclassPackable, DClass, ConstPackable
-from structlib.protocols.typedef import size_of, align_of
+from structlib.typedef import TypeDefSizableABC, TypeDefAlignableABC, align_of, size_of
+from structlib import bufferio
 from structlib.typedefs.integer import IntegerDefinition
 from structlib.typedefs.varlen import LengthPrefixedPrimitiveABC
 from structlib.typing_ import (
     ReadableBuffer,
-    ReadableStream,
-    WritableStream,
-    WritableBuffer,
 )
 from structlib.utils import default_if_none, auto_pretty_repr
 
 
 class StringBuffer(
-    PrimitivePackableABC, IterPackableABC, TypeDefSizableABC, TypeDefAlignableABC
+    PackableABC, IterPackableABC, TypeDefSizableABC, TypeDefAlignableABC
 ):
     """
     Represents a fixed-buffer string.
@@ -50,7 +46,7 @@ class StringBuffer(
 
     def iter_unpack(self, buffer: bytes, iter_count: int) -> Tuple[str, ...]:
         size = size_of(self)
-        partials = [buffer[i * size: (i + 1) * size] for i in range(iter_count)]
+        partials = [buffer[i * size : (i + 1) * size] for i in range(iter_count)]
         unpacked = [self.unpack_prim(partial) for partial in partials]
         return tuple(unpacked)
 
@@ -67,9 +63,9 @@ class StringBuffer(
             return True
         elif isinstance(other, StringBuffer):
             return (
-                    self.__typedef_alignment__ == other.__typedef_alignment__
-                    and self.__typedef_native_size__ == other.__typedef_native_size__
-                    and self._encoding == other._encoding
+                self.__typedef_alignment__ == other.__typedef_alignment__
+                and self.__typedef_native_size__ == other.__typedef_native_size__
+                and self._encoding == other._encoding
             )
         else:
             return False
@@ -96,21 +92,21 @@ class PascalString(LengthPrefixedPrimitiveABC):
     def __typedef_annotation__(self) -> Type:
         return str
 
-    def _internal_pack(self, arg: TPrim) -> bytes:
+    def _internal_pack(self, arg: T) -> bytes:
         return arg.encode(self._encoding)
 
-    def _internal_unpack(self, buffer: bytes) -> TPrim:
+    def _internal_unpack(self, buffer: bytes) -> T:
         return buffer.decode(self._encoding)
 
     _DEFAULT_ENCODING = "ascii"
 
     def __init__(
-            self,
-            size_type: IntegerDefinition,
-            encoding: str = None,
-            *,
-            alignment: int = None,
-            block_size: int = None,
+        self,
+        size_type: IntegerDefinition,
+        encoding: str = None,
+        *,
+        alignment: int = None,
+        block_size: int = None,
     ):
         super().__init__(size_type, alignment, block_size)
         self._encoding = default_if_none(encoding, self._DEFAULT_ENCODING)
@@ -120,8 +116,8 @@ class PascalString(LengthPrefixedPrimitiveABC):
             return True
         elif isinstance(other, PascalString):
             return (
-                    self.__typedef_alignment__ == other.__typedef_alignment__
-                    and self._encoding == other._encoding
+                self.__typedef_alignment__ == other.__typedef_alignment__
+                and self._encoding == other._encoding
             )
         else:
             return False

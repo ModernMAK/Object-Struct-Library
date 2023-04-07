@@ -1,20 +1,23 @@
 # Using IEEE_754
 import struct
-from typing import Any, Tuple
+from typing import Tuple
 
-from structlib.abc_.packing import IterPackableABC, PrimitivePackableABC
-from structlib.abc_.typedef import (
+from structlib.packing import IterPackableABC, PackableABC
+from structlib.typedef import (
     TypeDefByteOrderABC,
     TypeDefAlignableABC,
     TypeDefSizableABC,
+    native_size_of,
+    align_of,
+    size_of,
+    byteorder_of,
 )
 from structlib.byteorder import ByteOrder, resolve_byteorder
-from structlib.protocols.typedef import align_of, byteorder_of, native_size_of, size_of
 from structlib.utils import default_if_none, pretty_str, auto_pretty_repr
 
 
 class FloatDefinition(
-    PrimitivePackableABC,
+    PackableABC,
     IterPackableABC,
     TypeDefSizableABC,
     TypeDefAlignableABC,

@@ -4,8 +4,8 @@ from tests import rng
 from tests.typedefs.common_tests import AlignmentTests, DefinitionTests, ByteorderTests, PrimitiveTests, Sample2Bytes
 from tests.typedefs.util import classproperty
 from structlib.byteorder import ByteOrder
-from structlib.protocols.packing import PrimitivePackable
-from structlib.protocols.typedef import TypeDefAlignable
+from structlib.packing import PrimitivePackable
+from structlib.typedef import TypeDefAlignable
 from structlib.typedefs.strings import StringBuffer, CStringBuffer
 
 

@@ -1,6 +1,6 @@
 from typing import Tuple
 
-from structlib.io import bufferio
+from structlib import bufferio
 
 
 def create_sample_buffer(data: bytes, alignment: int = 1, offset: int = 0, origin: int = 0) -> Tuple[bytearray, int]:

@@ -1,33 +1,29 @@
 from copy import copy
 from typing import List, Union, Type, Any, Tuple
 
-from structlib.abc_.packing import PrimitivePackableABC, IterPackableABC
-from structlib.byteorder import ByteOrder
-from structlib.protocols.packing import (
-    iter_pack,
+from structlib.packing import (
+    PackableABC,
+    IterPackableABC,
     pack_buffer,
-    iter_unpack,
     unpack_buffer,
+    iter_pack,
+    iter_unpack,
 )
-from structlib.protocols.typedef import (
-    TypeDefSizable,
-    TypeDefAlignable,
-    TypeDefByteOrder,
-    byteorder_as,
-    size_of,
-    align_as,
+from structlib.byteorder import ByteOrder
+from structlib.typedef import (
     T,
 )
-from structlib.utils import auto_pretty_repr, pretty_repr
+from structlib.typedef import align_as, size_of, TypeDefByteOrder, byteorder_as
+from structlib.utils import pretty_repr
 
 AnyPackableTypeDef = Any  # TODO
 
 
 class FixedCollection(
-    PrimitivePackableABC,
+    PackableABC,
     IterPackableABC,
-    TypeDefSizable,
-    TypeDefAlignable,
+    # TypeDefSizable,
+    # TypeDefAlignable,
     TypeDefByteOrder,
 ):
     @property

@@ -1,7 +1,8 @@
 from typing import List, Any
 
+import structlib.packing
 from structlib.byteorder import ByteOrder, resolve_byteorder, NativeEndian, BigEndian, LittleEndian, NetworkEndian
-from structlib.protocols.typedef import TypeDefByteOrder, TypeDefAlignable
+from structlib.typedef import TypeDefAlignable, TypeDefByteOrder
 from structlib.typedefs import floating as _float
 from structlib.typedefs.floating import FloatDefinition
 from tests import rng

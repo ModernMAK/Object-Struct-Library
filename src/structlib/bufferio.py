@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Tuple, Union
+from typing import Tuple
 
-from structlib.protocols.typedef import calculate_padding
+from structlib.typedef import calculate_padding
 from structlib.typing_ import WritableBuffer, ReadableBuffer
 
 

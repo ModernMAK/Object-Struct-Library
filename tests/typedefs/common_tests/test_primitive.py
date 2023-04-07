@@ -3,8 +3,8 @@ from io import BytesIO
 from typing import List, Any, Callable
 
 from structlib.byteorder import ByteOrder, NativeEndian, BigEndian, LittleEndian, NetworkEndian
-from structlib.protocols.packing import PrimitivePackable
-from structlib.protocols.typedef import align_as, calculate_padding
+from structlib.packing import PrimitivePackable
+from structlib.typedef import align_as, calculate_padding
 from tests.typedefs.util import classproperty
 
 

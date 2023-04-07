@@ -3,7 +3,7 @@ import sys
 from types import NoneType
 from typing import List, Optional, Dict, Type
 
-from structlib.protocols.typedef import TypeDefAnnotated
+from structlib.typedef import TypeDefAnnotated
 from structlib.typedefs.structure import Struct
 
 
@@ -106,15 +106,13 @@ if __name__ == "__main__":
     from structlib.typedefs.strings import PascalString
     from structlib.typedefs.boolean import Boolean
 
-    TestString = PascalString(Int8) # Pascal string supporting up to 256 chars
-
+    TestString = PascalString(Int8)  # Pascal string supporting up to 256 chars
 
     @datastruct(alignment=4)
     class Test:
         age: Int8 = 8
         male: Boolean = True
         name: TestString = "Bobby Tables"
-
 
     r = Test()
     t = dataclasses.astuple(r)
@@ -124,5 +122,5 @@ if __name__ == "__main__":
     print(r.__annotations__)
     print(t)
     print(u)
-    packed = r._struct.struct_pack(*t)
+    packed = r._struct.prim_pack(t)
     print(packed)

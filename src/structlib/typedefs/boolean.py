@@ -1,13 +1,12 @@
 from typing import List, Tuple, Type
 
-from structlib.abc_.packing import IterPackableABC, PrimitivePackableABC
-from structlib.abc_.typedef import TypeDefSizableABC, TypeDefAlignableABC
-from structlib.protocols.typedef import align_of
+from structlib.packing import IterPackableABC, PackableABC
+from structlib.typedef import TypeDefSizableABC, TypeDefAlignableABC, align_of
 from structlib.utils import default_if_none, auto_pretty_repr
 
 
 class BooleanDefinition(
-    PrimitivePackableABC, IterPackableABC, TypeDefSizableABC, TypeDefAlignableABC
+    PackableABC, IterPackableABC, TypeDefSizableABC, TypeDefAlignableABC
 ):
     NATIVE_SIZE = 1  # Booleans are always 1 byte
 
@@ -15,10 +14,10 @@ class BooleanDefinition(
     TRUE_BUF = bytes([TRUE])
     FALSE = 0x00
     FALSE_BUF = bytes([FALSE])
+
     @property
     def __typedef_annotation__(self) -> Type:
         return bool
-
 
     def __init__(self, *, alignment: int = None):
         """

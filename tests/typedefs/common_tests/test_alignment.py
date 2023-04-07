@@ -1,7 +1,7 @@
 import warnings
 from typing import List
 
-from structlib.protocols.typedef import align_of, align_as, TypeDefAlignable
+from structlib.typedef import TypeDefAlignable, align_of, align_as
 from tests.typedefs.util import classproperty
 
 
