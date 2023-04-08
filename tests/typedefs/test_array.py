@@ -6,7 +6,7 @@ from tests import rng
 from tests.typedefs.common_tests import AlignmentTests, DefinitionTests, ByteorderTests, PrimitiveTests, Sample2Bytes
 from tests.typedefs.util import classproperty
 from structlib.byteorder import ByteOrder, resolve_byteorder, NativeEndian, BigEndian, LittleEndian, NetworkEndian
-from structlib.packing import PrimitivePackable
+from structlib.packing import Packable
 from structlib.typedef import native_size_of, TypeDefAlignable, align_of, TypeDefByteOrder, byteorder_of, byteorder_as, \
     calculate_padding
 from structlib.typedefs import integer, floating
@@ -34,19 +34,19 @@ class ArrayTests(AlignmentTests, PrimitiveTests, DefinitionTests, ABC):
         return [Array(self.ARR_SIZE, self.ARR_TYPE)]
 
     @classproperty
-    def NATIVE_PACKABLE(self) -> List[PrimitivePackable]:
+    def NATIVE_PACKABLE(self) -> List[Packable]:
         return [Array(self.ARR_SIZE, self.ARR_TYPE)]
 
     @classproperty
-    def BIG_PACKABLE(self) -> List[PrimitivePackable]:
+    def BIG_PACKABLE(self) -> List[Packable]:
         return []
 
     @classproperty
-    def LITTLE_PACKABLE(self) -> List[PrimitivePackable]:
+    def LITTLE_PACKABLE(self) -> List[Packable]:
         return []
 
     @classproperty
-    def NETWORK_PACKABLE(self) -> List[PrimitivePackable]:
+    def NETWORK_PACKABLE(self) -> List[Packable]:
         return []
 
     @classproperty
@@ -114,19 +114,19 @@ class IntegerArrayTests(ArrayTests, ByteorderTests):
         return [Array(self.ARR_SIZE, self.ARR_TYPE)]
 
     @classproperty
-    def NATIVE_PACKABLE(self) -> List[PrimitivePackable]:
+    def NATIVE_PACKABLE(self) -> List[Packable]:
         return [Array(self.ARR_SIZE, byteorder_as(self.ARR_TYPE, NativeEndian))]
 
     @classproperty
-    def BIG_PACKABLE(self) -> List[PrimitivePackable]:
+    def BIG_PACKABLE(self) -> List[Packable]:
         return [Array(self.ARR_SIZE, byteorder_as(self.ARR_TYPE, BigEndian))]
 
     @classproperty
-    def LITTLE_PACKABLE(self) -> List[PrimitivePackable]:
+    def LITTLE_PACKABLE(self) -> List[Packable]:
         return [Array(self.ARR_SIZE, byteorder_as(self.ARR_TYPE, LittleEndian))]
 
     @classproperty
-    def NETWORK_PACKABLE(self) -> List[PrimitivePackable]:
+    def NETWORK_PACKABLE(self) -> List[Packable]:
         return [Array(self.ARR_SIZE, byteorder_as(self.ARR_TYPE, NetworkEndian))]
 
     @classmethod
@@ -231,19 +231,19 @@ class FloatArrayTests(ArrayTests, ByteorderTests):
         return [Array(self.ARR_SIZE, self.ARR_TYPE)]
 
     @classproperty
-    def NATIVE_PACKABLE(self) -> List[PrimitivePackable]:
+    def NATIVE_PACKABLE(self) -> List[Packable]:
         return [Array(self.ARR_SIZE, self.ARR_TYPE)]
 
     @classproperty
-    def BIG_PACKABLE(self) -> List[PrimitivePackable]:
+    def BIG_PACKABLE(self) -> List[Packable]:
         return []
 
     @classproperty
-    def LITTLE_PACKABLE(self) -> List[PrimitivePackable]:
+    def LITTLE_PACKABLE(self) -> List[Packable]:
         return []
 
     @classproperty
-    def NETWORK_PACKABLE(self) -> List[PrimitivePackable]:
+    def NETWORK_PACKABLE(self) -> List[Packable]:
         return []
 
     @classmethod

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Tuple
 
 from structlib.typedef import calculate_padding
-from structlib.typing_ import WritableBuffer, ReadableBuffer
+from structlib.typeshed import WritableBuffer, ReadableBuffer
 
 
 def write(

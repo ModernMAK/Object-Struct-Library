@@ -3,9 +3,8 @@ from __future__ import annotations
 from io import BytesIO
 from typing import Any, Union, Tuple, BinaryIO
 
-from structlib.packing import PackableABC, nested_pack, unpack_buffer
+from structlib.packing import PackableABC, nested_pack
 
-# from structlib.abc_.packing import StructPackableABC
 from structlib.typedef import (
     TypeDefAlignableABC,
     TypeDefSizableABC,
@@ -19,7 +18,7 @@ from structlib.typedef import (
 )
 from structlib import streamio, bufferio
 from structlib.typedefs.array import AnyPackableTypeDef
-from structlib.typing_ import WritableBuffer, ReadableBuffer
+from structlib.typeshed import WritableBuffer, ReadableBuffer
 
 
 def _max_align_of(*types: TypeDefAlignable):
@@ -50,7 +49,7 @@ def _combined_size(*types: TypeDefSizableAndAlignable):
 
 
 class Struct(PackableABC[Tuple], TypeDefSizableABC, TypeDefAlignableABC):
-    def prim_pack(self, args: Tuple) -> bytes:
+    def pack(self, args: Tuple) -> bytes:
         # TODO; packed result does not account for struct alignment
         #   EG. if the data is packed into 13 bytes, with an alignment of 4 on the struct, we should pad to 16 bytes
         #   THIS ONLY HAPPENS FOR NON-FIXED STRUCTURES!
@@ -59,9 +58,8 @@ class Struct(PackableABC[Tuple], TypeDefSizableABC, TypeDefAlignableABC):
             written = 0
             buffer = bytearray(size_of(self))
             for arg, t in zip(args, self._types):
-                packed = nested_pack(
-                    t, arg
-                )  # TODO; check if this fails when t is Struct because Tuple/List is wrapped
+                packed = t.pack(arg)
+                # TODO; check if this fails when t is Struct because Tuple/List is wrapped
                 written += bufferio.write(
                     buffer, packed, align_of(t), written, origin=0
                 )
@@ -69,9 +67,8 @@ class Struct(PackableABC[Tuple], TypeDefSizableABC, TypeDefAlignableABC):
         else:
             with BytesIO() as stream:
                 for arg, t in zip(args, self._types):
-                    packed = nested_pack(
-                        t, arg
-                    )  # TODO; check if this fails when t is Struct because Tuple/List is wrapped
+                    packed = t.pack(arg)
+                    # TODO; check if this fails when t is Struct because Tuple/List is wrapped
                     streamio.write(stream, packed, align_of(t), origin=0)
                 suffix_padding = bufferio.create_padding_buffer(
                     calculate_padding(align_of(self), stream.tell())
@@ -80,19 +77,19 @@ class Struct(PackableABC[Tuple], TypeDefSizableABC, TypeDefAlignableABC):
                 stream.seek(0)
                 return stream.read()
 
-    def unpack_prim(self, buffer: bytes) -> Tuple:
+    def unpack(self, buffer: bytes) -> Tuple:
         total_read = 0
         results = []
         for t in self._types:
-            read, result = unpack_buffer(t, buffer, offset=total_read, origin=0)
+            read, result = t._unpack_buffer(buffer, offset=total_read, origin=0)
             results.append(result)
             total_read += read
         return tuple(results)
 
-    def prim_pack_buffer(
+    def _pack_buffer(
         self, buffer: WritableBuffer, args: Tuple, *, offset: int = 0, origin: int = 0
     ) -> int:
-        packed = self.prim_pack(args)
+        packed = self.pack(args)
         alignment = align_of(self)
         return bufferio.write(buffer, packed, alignment, offset, origin)
 
@@ -102,11 +99,11 @@ class Struct(PackableABC[Tuple], TypeDefSizableABC, TypeDefAlignableABC):
         size = size_of(self)
         alignment = align_of(self)
         read, packed = bufferio.read(buffer, size, alignment, offset, origin)
-        unpacked = self.unpack_prim(packed)
+        unpacked = self.unpack(packed)
         return read, unpacked
 
-    def prim_pack_stream(self, stream: BinaryIO, *args: Any, origin: int) -> int:
-        packed = self.prim_pack(*args)
+    def _pack_stream(self, stream: BinaryIO, *args: Any, origin: int) -> int:
+        packed = self.pack(*args)
         alignment = align_of(self)
         return streamio.write(stream, packed, alignment, origin)
 

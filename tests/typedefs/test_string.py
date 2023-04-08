@@ -4,14 +4,14 @@ from tests import rng
 from tests.typedefs.common_tests import AlignmentTests, DefinitionTests, ByteorderTests, PrimitiveTests, Sample2Bytes
 from tests.typedefs.util import classproperty
 from structlib.byteorder import ByteOrder
-from structlib.packing import PrimitivePackable
+from structlib.packing import Packable
 from structlib.typedef import TypeDefAlignable
 from structlib.typedefs.strings import StringBuffer, CStringBuffer
 
 
 class TestString(PrimitiveTests, DefinitionTests, AlignmentTests):
     @classproperty
-    def NATIVE_PACKABLE(self) -> List[PrimitivePackable]:
+    def NATIVE_PACKABLE(self) -> List[Packable]:
         return [StringBuffer(self.ARR_SIZE, encoding=self.ENCODING)]
 
     @classproperty
@@ -30,15 +30,15 @@ class TestString(PrimitiveTests, DefinitionTests, AlignmentTests):
         return [StringBuffer(self.ARR_SIZE, encoding=self.ENCODING)]
 
     @classproperty
-    def BIG_PACKABLE(self) -> List[PrimitivePackable]:
+    def BIG_PACKABLE(self) -> List[Packable]:
         return []
 
     @classproperty
-    def LITTLE_PACKABLE(self) -> List[PrimitivePackable]:
+    def LITTLE_PACKABLE(self) -> List[Packable]:
         return []
 
     @classproperty
-    def NETWORK_PACKABLE(self) -> List[PrimitivePackable]:
+    def NETWORK_PACKABLE(self) -> List[Packable]:
         return []
 
     @classmethod
@@ -131,7 +131,7 @@ class TestCString(TestString):
         return r
 
     @classproperty
-    def NATIVE_PACKABLE(self) -> List[PrimitivePackable]:
+    def NATIVE_PACKABLE(self) -> List[Packable]:
         return [CStringBuffer(self.ARR_SIZE, encoding=self.ENCODING)]
 
     @classproperty

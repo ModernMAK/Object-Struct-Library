@@ -1,7 +1,7 @@
 from typing import List, Any
 
 from structlib.byteorder import ByteOrder
-from structlib.packing import PrimitivePackable
+from structlib.packing import Packable
 from structlib.typedef import TypeDefAlignable
 from structlib.typedefs import boolean
 from structlib.typedefs.boolean import BooleanDefinition
@@ -21,19 +21,19 @@ class BooleanTests(AlignmentTests, DefinitionTests, PrimitiveTests):
         return [BooleanDefinition(alignment=2)]
 
     @classproperty
-    def NATIVE_PACKABLE(self) -> List[PrimitivePackable]:
+    def NATIVE_PACKABLE(self) -> List[Packable]:
         return [BooleanDefinition()]
 
     @classproperty
-    def BIG_PACKABLE(self) -> List[PrimitivePackable]:
+    def BIG_PACKABLE(self) -> List[Packable]:
         return []
 
     @classproperty
-    def LITTLE_PACKABLE(self) -> List[PrimitivePackable]:
+    def LITTLE_PACKABLE(self) -> List[Packable]:
         return []
 
     @classproperty
-    def NETWORK_PACKABLE(self) -> List[PrimitivePackable]:
+    def NETWORK_PACKABLE(self) -> List[Packable]:
         return []
 
     @classproperty

@@ -55,10 +55,10 @@ class BooleanDefinition(
         results = [False if partial == self.FALSE else True for partial in partials]
         return results
 
-    def prim_pack(self, arg: bool) -> bytes:
+    def pack(self, arg: bool) -> bytes:
         return self._to_bytes(arg)
 
-    def unpack_prim(self, buffer: bytes) -> bool:
+    def unpack(self, buffer: bytes) -> bool:
         return self._from_bytes(buffer, 1)[0]
 
     def iter_pack(self, *args: Tuple[bool, ...]) -> bytes:

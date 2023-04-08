@@ -18,24 +18,25 @@ from structlib.errors import PrettyNotImplementedError
 
 T = TypeVar("T")
 
+
 class AttrProtocolMeta(_ProtocolMeta):
     # the lack of __instancehook__.
     def __instancecheck__(cls, instance):
         # We need this method for situations where attributes are
         # assigned in __init__.
         if (
-            not getattr(cls, "_is_protocol", False) or _is_callable_members_only(cls)
+                not getattr(cls, "_is_protocol", False) or _is_callable_members_only(cls)
         ) and issubclass(instance.__class__, cls):
             return True
         if cls._is_protocol:
             if all(
-                hasattr(instance, attr) and
-                # All *methods* can be blocked by setting them to None.
-                (
-                    not callable(getattr(cls, attr, None))
-                    or getattr(instance, attr) is not None
-                )
-                for attr in _get_protocol_attrs(cls)
+                    hasattr(instance, attr) and
+                    # All *methods* can be blocked by setting them to None.
+                    (
+                            not callable(getattr(cls, attr, None))
+                            or getattr(instance, attr) is not None
+                    )
+                    for attr in _get_protocol_attrs(cls)
             ):
                 return True
             else:
@@ -98,8 +99,6 @@ class TypeDefByteOrderABC(TypeDefByteOrder):
             inst = copy(self)
             inst.__typedef_byteorder__ = byteorder
             return inst
-
-
 
 
 @runtime_checkable

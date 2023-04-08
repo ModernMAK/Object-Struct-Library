@@ -9,8 +9,8 @@ from structlib.packing import (
 from structlib.typedef import TypeDefSizableABC, TypeDefAlignableABC, align_of, size_of
 from structlib import bufferio
 from structlib.typedefs.integer import IntegerDefinition
-from structlib.typedefs.varlen import LengthPrefixedPrimitiveABC
-from structlib.typing_ import (
+from structlib.typedefs.varlen import LengthPrefixedTypeABC
+from structlib.typeshed import (
     ReadableBuffer,
 )
 from structlib.utils import default_if_none, auto_pretty_repr
@@ -26,7 +26,7 @@ class StringBuffer(
     When unpacking; padding is preserved
     """
 
-    def prim_pack(self, arg: str) -> bytes:
+    def pack(self, arg: str) -> bytes:
         encoded = arg.encode(self._encoding)
         buf = bytearray(encoded)
         size = size_of(self)
@@ -36,18 +36,18 @@ class StringBuffer(
             buf.extend([0x00] * (size - len(buf)))
         return buf
 
-    def unpack_prim(self, buffer: bytes) -> str:
+    def unpack(self, buffer: bytes) -> str:
         return buffer.decode(encoding=self._encoding)
 
     def iter_pack(self, *args: str) -> bytes:
-        parts = [self.prim_pack(arg) for arg in args]
+        parts = [self.pack(arg) for arg in args]
         empty = bytearray()
         return empty.join(parts)
 
     def iter_unpack(self, buffer: bytes, iter_count: int) -> Tuple[str, ...]:
         size = size_of(self)
         partials = [buffer[i * size : (i + 1) * size] for i in range(iter_count)]
-        unpacked = [self.unpack_prim(partial) for partial in partials]
+        unpacked = [self.unpack(partial) for partial in partials]
         return tuple(unpacked)
 
     _DEFAULT_ENCODING = "ascii"
@@ -83,7 +83,7 @@ class StringBuffer(
 #
 
 
-class PascalString(LengthPrefixedPrimitiveABC):
+class PascalString(LengthPrefixedTypeABC):
     """
     Represents a var-buffer string.
     """
@@ -140,7 +140,7 @@ class CStringBuffer(StringBuffer):
     Otherwise, it functions identically to StringBuffer.
     """
 
-    def unpack_prim(self, buffer: bytes) -> str:
+    def unpack(self, buffer: bytes) -> str:
         return buffer.decode(encoding=self._encoding).rstrip("\0")
 
     def __str__(self):

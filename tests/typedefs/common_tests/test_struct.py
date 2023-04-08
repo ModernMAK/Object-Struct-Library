@@ -4,7 +4,7 @@ from typing import List, Any, Callable
 
 from tests.typedefs.util import classproperty
 from structlib.byteorder import ByteOrder, NativeEndian, BigEndian, LittleEndian, NetworkEndian
-from structlib.packing import PrimitivePackable
+from structlib.packing import Packable
 from structlib.typedef import align_as, calculate_padding
 
 
@@ -51,94 +51,94 @@ def sample2buffer(s: Any, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes
     return buffer
 
 
-def assert_pack(t: PrimitivePackable, sample2bytes: Sample2Bytes, samples: List[Any]):
+def assert_pack(t: Packable, sample2bytes: Sample2Bytes, samples: List[Any]):
     for sample in samples:
         buffer = sample2bytes(sample)
-        packed = t.prim_pack(sample)
+        packed = t.pack(sample)
         assert buffer == packed
 
 
-def assert_unpack(t: PrimitivePackable, sample2bytes: Sample2Bytes, samples: List[Any]):
+def assert_unpack(t: Packable, sample2bytes: Sample2Bytes, samples: List[Any]):
     for sample in samples:
         buffer = sample2bytes(sample)
-        unpacked = t.unpack_prim(buffer)
+        unpacked = t.unpack(buffer)
         assert sample == unpacked or NAN_CHECK(sample, unpacked)
 
 
-def assert_pack_equality(left: PrimitivePackable, right: PrimitivePackable, samples: List[Any]):
+def assert_pack_equality(left: Packable, right: Packable, samples: List[Any]):
     for sample in samples:
-        l_packed, r_packed = left.prim_pack(sample), right.prim_pack(sample)
+        l_packed, r_packed = left.pack(sample), right.pack(sample)
         assert l_packed == r_packed
 
 
-def assert_unpack_equality(left: PrimitivePackable, right: PrimitivePackable, sample2bytes: Sample2Bytes, samples: List[Any]):
+def assert_unpack_equality(left: Packable, right: Packable, sample2bytes: Sample2Bytes, samples: List[Any]):
     for sample in samples:
         buffer = sample2bytes(sample)
         l_unpacked, r_unpacked = left.struct_unpack(buffer), right.struct_unpack(buffer)
         assert l_unpacked == r_unpacked or NAN_CHECK(l_unpacked, r_unpacked)
 
 
-def assert_buffer_pack(t: PrimitivePackable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
+def assert_buffer_pack(t: Packable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
     for sample in samples:
         buffer = get_buffer(alignment, offset, origin)
         expected = sample2buffer(sample, get_buffer, sample2bytes, alignment, offset, origin)
-        written = t.prim_pack_buffer(buffer, sample, offset=offset, origin=origin)
+        written = t.pack_buffer(buffer, sample, offset=offset, origin=origin)
         assert len(expected) == len(buffer)
         assert expected == buffer
 
 
-def assert_buffer_unpack(t: PrimitivePackable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
+def assert_buffer_unpack(t: Packable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
     for sample in samples:
         buffer = sample2buffer(sample, get_buffer, sample2bytes, alignment, offset, origin)
-        read, unpacked = t.unpack_prim_buffer(buffer, offset=offset, origin=origin)
+        read, unpacked = t.unpack_buffer(buffer, offset=offset, origin=origin)
         assert sample == unpacked or NAN_CHECK(sample, unpacked)
 
 
-def assert_buffer_pack_equality(left: PrimitivePackable, right: PrimitivePackable, get_buffer: GetEmptyBuffer, samples: List[Any], alignment: int, offset: int, origin: int):
+def assert_buffer_pack_equality(left: Packable, right: Packable, get_buffer: GetEmptyBuffer, samples: List[Any], alignment: int, offset: int, origin: int):
     for sample in samples:
         l_empty, r_empty = get_buffer(alignment, offset, origin), get_buffer(alignment, offset, origin)
-        l_written, r_written = left.prim_pack_buffer(l_empty, sample, offset=offset, origin=origin), right.prim_pack_buffer(r_empty, sample, offset=offset, origin=origin)
+        l_written, r_written = left.pack_buffer(l_empty, sample, offset=offset, origin=origin), right.pack_buffer(r_empty, sample, offset=offset, origin=origin)
         assert l_empty == r_empty
         assert l_written == r_written
 
 
-def assert_buffer_unpack_equality(left: PrimitivePackable, right: PrimitivePackable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
+def assert_buffer_unpack_equality(left: Packable, right: Packable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
     for sample in samples:
         buffer = sample2buffer(sample, get_buffer, sample2bytes, alignment, offset, origin)
-        (l_read, l_unpacked), (r_read, r_unpacked) = left.unpack_prim_buffer(buffer, offset=offset, origin=origin), right.unpack_prim_buffer(buffer, offset=offset, origin=origin)
+        (l_read, l_unpacked), (r_read, r_unpacked) = left.unpack_buffer(buffer, offset=offset, origin=origin), right.unpack_buffer(buffer, offset=offset, origin=origin)
         assert l_read == r_read
         assert l_unpacked == r_unpacked or NAN_CHECK(l_unpacked, r_unpacked)
 
 
-def assert_stream_pack(t: PrimitivePackable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
+def assert_stream_pack(t: Packable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
     for sample in samples:
         empty = get_buffer(alignment, offset, origin)
         expected = sample2buffer(sample, get_buffer, sample2bytes, alignment, offset, origin)
         with BytesIO(empty) as stream:
             stream.seek(origin + offset)
-            written = t.prim_pack_stream(stream, sample, origin=origin)
+            written = t.pack_stream(stream, sample, origin=origin)
             stream.seek(0)
             buffer = stream.read()
             assert expected == buffer
 
 
-def assert_stream_unpack(t: PrimitivePackable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
+def assert_stream_unpack(t: Packable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
     for sample in samples:
         buffer = sample2buffer(sample, get_buffer, sample2bytes, alignment, offset, origin)
         with BytesIO(buffer) as stream:
             stream.seek(origin + offset)
-            read, unpacked = t.unpack_prim_stream(stream, origin=origin)
+            read, unpacked = t.stream_unpack(stream, origin=origin)
             assert sample == unpacked or NAN_CHECK(sample, unpacked)
 
 
-def assert_stream_pack_equality(left: PrimitivePackable, right: PrimitivePackable, get_buffer: GetEmptyBuffer, samples: List[Any], alignment: int, offset: int, origin: int):
+def assert_stream_pack_equality(left: Packable, right: Packable, get_buffer: GetEmptyBuffer, samples: List[Any], alignment: int, offset: int, origin: int):
     for sample in samples:
         l_empty, r_empty = get_buffer(alignment, offset, origin), get_buffer(alignment, offset, origin)
         with BytesIO(l_empty) as l_stream:
             with BytesIO(r_empty) as r_stream:
                 l_stream.seek(origin + offset)
                 r_stream.seek(origin + offset)
-                l_written, r_written = left.prim_pack_stream(l_stream, sample, origin=origin), right.prim_pack_stream(r_stream, sample, origin=origin)
+                l_written, r_written = left.pack_stream(l_stream, sample, origin=origin), right.pack_stream(r_stream, sample, origin=origin)
 
                 l_stream.seek(0)
                 r_stream.seek(0)
@@ -149,7 +149,7 @@ def assert_stream_pack_equality(left: PrimitivePackable, right: PrimitivePackabl
                 assert l_packed == r_packed
 
 
-def assert_stream_unpack_equality(left: PrimitivePackable, right: PrimitivePackable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
+def assert_stream_unpack_equality(left: Packable, right: Packable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
     for sample in samples:
         buffer = sample2buffer(sample, get_buffer, sample2bytes, alignment, offset, origin)
         with BytesIO(buffer) as l_stream:
@@ -190,19 +190,19 @@ class StructureTests:
         raise NotImplementedError
 
     @classproperty
-    def NATIVE_PACKABLE(self) -> List[PrimitivePackable]:
+    def NATIVE_PACKABLE(self) -> List[Packable]:
         raise NotImplementedError
 
     @classproperty
-    def BIG_PACKABLE(self) -> List[PrimitivePackable]:
+    def BIG_PACKABLE(self) -> List[Packable]:
         raise NotImplementedError
 
     @classproperty
-    def LITTLE_PACKABLE(self) -> List[PrimitivePackable]:
+    def LITTLE_PACKABLE(self) -> List[Packable]:
         raise NotImplementedError
 
     @classproperty
-    def NETWORK_PACKABLE(self) -> List[PrimitivePackable]:
+    def NETWORK_PACKABLE(self) -> List[Packable]:
         raise NotImplementedError
 
     @classmethod

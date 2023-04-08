@@ -68,18 +68,18 @@ class FloatDefinition(
     def __repr__(self):
         return auto_pretty_repr(self)
 
-    def prim_pack(self, arg: float) -> bytes:
+    def pack(self, arg: float) -> bytes:
         data = self._internal.pack(arg)
         buffer = bytearray(size_of(self))
         buffer[0 : len(data)] = data
         return buffer
 
-    def unpack_prim(self, buffer: bytes) -> float:
+    def unpack(self, buffer: bytes) -> float:
         data_buffer = buffer[0 : native_size_of(self)]
         return self._internal.unpack(data_buffer)[0]
 
     def iter_pack(self, *args: float) -> bytes:
-        parts = [self.prim_pack(arg) for arg in args]
+        parts = [self.pack(arg) for arg in args]
         empty = bytearray()
         merged = empty.join(parts)
         return merged
@@ -87,7 +87,7 @@ class FloatDefinition(
     def iter_unpack(self, buffer: bytes, iter_count: int) -> Tuple[float, ...]:
         size = size_of(self)
         partials = [buffer[i * size : (i + 1) * size] for i in range(iter_count)]
-        results = [self.unpack_prim(partial) for partial in partials]
+        results = [self.unpack(partial) for partial in partials]
         return tuple(results)
 
 

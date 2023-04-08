@@ -122,5 +122,5 @@ if __name__ == "__main__":
     print(r.__annotations__)
     print(t)
     print(u)
-    packed = r._struct.prim_pack(t)
+    packed = r._struct.pack(t)
     print(packed)

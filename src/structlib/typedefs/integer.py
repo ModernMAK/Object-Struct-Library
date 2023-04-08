@@ -58,10 +58,10 @@ class IntegerDefinition(
         ]
         return results
 
-    def prim_pack(self, arg: T) -> bytes:
+    def pack(self, arg: T) -> bytes:
         return self._to_bytes(arg)
 
-    def unpack_prim(self, buffer: bytes) -> int:
+    def unpack(self, buffer: bytes) -> int:
         return self._from_bytes(buffer, 1)[0]
 
     def iter_pack(self, *args: Tuple[Any, ...]) -> bytes:

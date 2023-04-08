@@ -4,10 +4,10 @@ from typing import List, Union, Type, Any, Tuple
 from structlib.packing import (
     PackableABC,
     IterPackableABC,
-    pack_buffer,
-    unpack_buffer,
-    iter_pack,
-    iter_unpack,
+    # _pack_buffer,
+    # _unpack_buffer,
+    # iter_pack,
+    # iter_unpack,
 )
 from structlib.byteorder import ByteOrder
 from structlib.typedef import (
@@ -55,14 +55,14 @@ class FixedCollection(
             return self
 
     def __init__(
-        self, args: int, data_type: Union[Type[AnyPackableTypeDef], AnyPackableTypeDef]
+            self, args: int, data_type: Union[Type[AnyPackableTypeDef], AnyPackableTypeDef]
     ):
         self._backing = data_type
         self._args = args
 
     @classmethod
     def Unsized(
-        cls: T, data_type: Union[Type[AnyPackableTypeDef], AnyPackableTypeDef]
+            cls: T, data_type: Union[Type[AnyPackableTypeDef], AnyPackableTypeDef]
     ) -> T:
         """
         Helper, returns an 'unsized' Array
@@ -87,48 +87,45 @@ class FixedCollection(
         msg = str(self)
         return pretty_repr(repr, msg)
 
-    def prim_pack(self, args: List) -> bytes:
+    def pack(self, args: List) -> bytes:
         try:
-            return iter_pack(self._backing, *args)
+            return self._backing.iter_pack(*args)
         except TypeError:
             size = size_of(self)
             buffer = bytearray(size)
             written = 0
             for arg in args:
-                written += pack_buffer(
+                written += self._backing._pack_buffer(
                     self._backing, buffer, arg, offset=written, origin=0
                 )
             return buffer
 
-    def unpack_prim(self, buffer: bytes) -> List:
+    def unpack(self, buffer: bytes) -> List:
         try:
-            return iter_unpack(self._backing, buffer, self._args)
+            return self._backing.iter_unpack(buffer, self._args)
         except TypeError:
             total_read = 0
             results = []
             for _ in range(self._args):
-                read, unpacked = unpack_buffer(
-                    self._backing, buffer, offset=total_read, origin=0
-                )
+                read, unpacked = self._backing._unpack_buffer(buffer, offset=total_read, origin=0)
                 total_read += read
                 results.append(unpacked)
             return results
 
     def iter_pack(self, *args: List) -> bytes:
-        parts = [self.prim_pack(arg) for arg in args]
+        parts = [self.pack(arg) for arg in args]
         empty = bytearray()
         return empty.join(parts)
 
     def iter_unpack(self, buffer: bytes, iter_count: int) -> Tuple[List, ...]:
         size = size_of(self)
-        partials = [buffer[i * size : (i + 1) * size] for i in range(iter_count)]
-        parts = [self.unpack_prim(partial) for partial in partials]
+        partials = [buffer[i * size: (i + 1) * size] for i in range(iter_count)]
+        parts = [self.unpack(partial) for partial in partials]
         return tuple(parts)
 
 
 class Array(FixedCollection):
     ...
-
 
 # It's too annoying when using typing.Tuple
 # class Tuple(FixedCollection):

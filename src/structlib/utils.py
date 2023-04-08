@@ -1,22 +1,7 @@
 from typing import Any, Optional, OrderedDict, Dict, Union
 
 from structlib.byteorder import ByteOrder
-from structlib.typing_ import ReadableBuffer
-
-
-def generate_chunks_from_buffer(
-    buffer: ReadableBuffer, count: int, chunk_size: int, offset: int = 0
-):
-    """
-    Useful for splitting a buffer into fixed-sized chunks.
-    :param buffer: The buffer to read from
-    :param count: The amount of chunks to read
-    :param chunk_size: The size (in bytes) of an individual chunk
-    :param offset: The offset in the buffer to read from
-    :return: A generator returning each chunk as bytes
-    """
-    for _ in range(count):
-        yield buffer[offset + _ * chunk_size : offset + (_ + 1) * chunk_size]
+from structlib.typeshed import ReadableBuffer
 
 
 def pretty_repr(_repr, msg) -> str:
@@ -52,23 +37,3 @@ def default_if_none(value: Any, default: Any) -> Any:
     """
     return default if value is None else value
 
-
-# Stolen from
-# https://stackoverflow.com/qstions/128573/using-property-on-classmethods/64738850#64738850
-# We don't use @classmethod + @property to allow <= 3.9 support
-class ClassProperty(object):
-    def __init__(self, fget):
-        self.fget = fget
-
-    def __get__(self, owner_self, owner_cls):
-        return self.fget(owner_cls)
-
-
-classproperty = ClassProperty  # Alias for decorator
-
-
-def dataclass_str_format(
-    cls_name: str, attrs: Union[OrderedDict[str, Any], Dict[str, Any]]
-):
-    pairs = [f"{name}={value}" for name, value in attrs.items()]
-    return f"{cls_name}({', '.join(pairs)})"
