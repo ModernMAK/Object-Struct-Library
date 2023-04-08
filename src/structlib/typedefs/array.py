@@ -55,14 +55,14 @@ class FixedCollection(
             return self
 
     def __init__(
-            self, args: int, data_type: Union[Type[AnyPackableTypeDef], AnyPackableTypeDef]
+        self, args: int, data_type: Union[Type[AnyPackableTypeDef], AnyPackableTypeDef]
     ):
         self._backing = data_type
         self._args = args
 
     @classmethod
     def Unsized(
-            cls: T, data_type: Union[Type[AnyPackableTypeDef], AnyPackableTypeDef]
+        cls: T, data_type: Union[Type[AnyPackableTypeDef], AnyPackableTypeDef]
     ) -> T:
         """
         Helper, returns an 'unsized' Array
@@ -107,7 +107,9 @@ class FixedCollection(
             total_read = 0
             results = []
             for _ in range(self._args):
-                read, unpacked = self._backing._unpack_buffer(buffer, offset=total_read, origin=0)
+                read, unpacked = self._backing._unpack_buffer(
+                    buffer, offset=total_read, origin=0
+                )
                 total_read += read
                 results.append(unpacked)
             return results
@@ -119,13 +121,14 @@ class FixedCollection(
 
     def iter_unpack(self, buffer: bytes, iter_count: int) -> Tuple[List, ...]:
         size = size_of(self)
-        partials = [buffer[i * size: (i + 1) * size] for i in range(iter_count)]
+        partials = [buffer[i * size : (i + 1) * size] for i in range(iter_count)]
         parts = [self.unpack(partial) for partial in partials]
         return tuple(parts)
 
 
 class Array(FixedCollection):
     ...
+
 
 # It's too annoying when using typing.Tuple
 # class Tuple(FixedCollection):

@@ -1,8 +1,8 @@
+import copy
 import dataclasses
-import sys
-from types import NoneType
-from typing import List, Optional, Dict, Type
+from typing import Optional, Type, Tuple, TYPE_CHECKING
 
+from structlib.packing import Packable, T, PackReadable, PackWritable
 from structlib.typedef import TypeDefAnnotated
 from structlib.typedefs.structure import Struct
 
@@ -11,7 +11,7 @@ def _is_packable(inst_or_klass):
     return False
 
 
-from dataclasses import _create_fn
+from dataclasses import _is_dataclass_instance
 
 
 #
@@ -74,6 +74,124 @@ class StructLike:
 # class StructField(dataclasses.Field):
 
 
+def astuple(obj, *, tuple_factory=tuple):
+    """Return the fields of a dataclass instance as a new tuple of field values.
+
+    Example usage::
+
+      @dataclass
+      class C:
+          x: int
+          y: int
+
+    c = C(1, 2)
+    assert astuple(c) == (1, 2)
+
+    If given, 'tuple_factory' will be used instead of built-in tuple.
+    The function applies recursively to field values that are
+    dataclass instances. This will also look into built-in containers:
+    tuples, lists, and dicts.
+    """
+
+    if not _is_dataclass_instance(obj):
+        raise TypeError("astuple() should be called on dataclass instances")
+
+    result = []
+    for f in dataclasses.fields(obj):
+        value = _astuple_inner(getattr(obj, f.name), tuple_factory)
+        result.append(value)
+    return tuple_factory(result)
+
+
+def _astuple_inner(obj, tuple_factory):
+    if isinstance(obj, tuple) and hasattr(obj, "_fields"):
+        # obj is a namedtuple.  Recurse into it, but the returned
+        # object is another namedtuple of the same type.  This is
+        # similar to how other list- or tuple-derived classes are
+        # treated (see below), but we just need to create them
+        # differently because a namedtuple's __init__ needs to be
+        # called differently (see bpo-34363).
+        return type(obj)(*[_astuple_inner(v, tuple_factory) for v in obj])
+    elif isinstance(obj, (list, tuple)):
+        # Assume we can create an object of this type by passing in a
+        # generator (which is not true for namedtuples, handled
+        # above).
+        return type(obj)(_astuple_inner(v, tuple_factory) for v in obj)
+    elif isinstance(obj, dict):
+        return type(obj)(
+            (_astuple_inner(k, tuple_factory), _astuple_inner(v, tuple_factory))
+            for k, v in obj.items()
+        )
+    else:
+        return copy.deepcopy(obj)
+
+
+class _DataclassPackableMixin(Packable):
+    if TYPE_CHECKING:
+        _struct: Packable = None
+
+    @classmethod
+    def apply(cls, klass):
+        klass.pack = cls.pack
+        klass.unpack = cls.unpack
+        klass.pack_into = cls.pack_into
+        klass.unpack_from = cls.unpack_from
+
+        klass.__typedef_annotation__ = cls.__typedef_annotation__
+        klass.__typedef_alignment__ = cls.__typedef_alignment__
+
+    @property
+    def __typedef_annotation__(self):
+        return self.__class__
+
+    @property
+    def __typedef_alignment__(self):
+        return self._struct.__typedef_alignment__
+
+    def pack(cls, arg: Optional[T] = None) -> bytes:
+        if isinstance(cls, type):  # class call
+            struct_args = astuple(arg)
+            return arg._struct.pack(struct_args)
+        else:
+            if arg is not None:
+                raise NotImplementedError
+            struct_args = astuple(cls)  # cls is self
+            return cls._struct.pack(struct_args)
+
+    @classmethod
+    def unpack(cls, buffer: bytes) -> T:
+        args = cls._struct.unpack(buffer)
+        return cls.__init__(*args)
+
+    @classmethod
+    def pack_into(
+        cls,
+        writable: PackWritable,
+        arg: Optional[T] = None,
+        *,
+        offset: Optional[int] = None,
+        origin: int = 0,
+    ) -> int:
+        if isinstance(cls, type):  # class call
+            struct_args = astuple(arg)
+            return arg._struct.pack_into(
+                writable, struct_args, offset=offset, origin=origin
+            )
+        else:
+            if arg is not None:
+                raise NotImplementedError
+            struct_args = astuple(cls)  # cls is self
+            return cls._struct.pack_into(
+                writable, struct_args, offset=offset, origin=origin
+            )
+
+    @classmethod
+    def unpack_from(
+        cls, readable: PackReadable, *, offset: Optional[int] = None, origin: int = 0
+    ) -> Tuple[int, T]:
+        return cls._struct.unpack_from(readable, offset=offset, origin=origin)
+
+
 def datastruct(cls=None, /, alignment: int = None, **dataclass_kwargs):
     def resolve_annotation(t):
         return t.__typedef_annotation__ if isinstance(t, TypeDefAnnotated) else t
@@ -93,6 +211,8 @@ def datastruct(cls=None, /, alignment: int = None, **dataclass_kwargs):
         klass._struct = construct_struct(
             [t for t in klass._dstruct_annotations.values()]
         )
+        _DataclassPackableMixin.apply(klass)
+        print(klass.__typedef_alignment__)
         return klass
 
     if cls is None:
@@ -108,19 +228,39 @@ if __name__ == "__main__":
 
     TestString = PascalString(Int8)  # Pascal string supporting up to 256 chars
 
-    @datastruct(alignment=4)
+    @datastruct(alignment=2)
     class Test:
         age: Int8 = 8
         male: Boolean = True
         name: TestString = "Bobby Tables"
 
-    r = Test()
-    t = dataclasses.astuple(r)
-    u = dataclasses.asdict(r)
-    print(r)
-    print(r._dstruct_annotations)
-    print(r.__annotations__)
-    print(t)
-    print(u)
-    packed = r._struct.pack(t)
-    print(packed)
+    @datastruct(alignment=4)
+    class TestOuter:
+        grade: Int8 = 77
+        info: Test = Test()
+
+    @datastruct(alignment=1)
+    class TestOuterOuter:
+        teacher: Test = Test(88, False, "Ivanna Teeche")
+        student: TestOuter = TestOuter()
+        student2: TestOuter = TestOuter(77, Test(9, False, "Molly Bables"))
+
+    def _run_test(klass):
+        sample = klass()
+        print(sample)
+        print(sample._dstruct_annotations)
+        print(sample.__annotations__)
+        tuple = astuple(sample)
+        print(tuple)
+        dictionary = dataclasses.asdict(sample)
+        print(dictionary)
+        packed_manually = sample._struct.pack(tuple)
+        print(packed_manually)
+        packed_klass = klass.pack(sample)
+        print(packed_klass)
+        packed_self = sample.pack()
+        print(packed_self)
+
+    _run_test(Test)
+    _run_test(TestOuter)
+    _run_test(TestOuterOuter)

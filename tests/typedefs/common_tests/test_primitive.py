@@ -83,7 +83,7 @@ def assert_buffer_pack(t: Packable, get_buffer: GetEmptyBuffer, sample2bytes: Sa
     for sample in samples:
         buffer = get_buffer(alignment, offset, origin)
         expected = sample2buffer(sample, get_buffer, sample2bytes, alignment, offset, origin)
-        written = t.pack_buffer(buffer, sample, offset=offset, origin=origin)
+        written = t.pack_into(buffer, sample, offset=offset, origin=origin)
         assert len(expected) == len(buffer)
         assert expected == buffer
 
@@ -91,7 +91,7 @@ def assert_buffer_pack(t: Packable, get_buffer: GetEmptyBuffer, sample2bytes: Sa
 def assert_buffer_unpack(t: Packable, get_buffer: GetEmptyBuffer, sample2bytes: Sample2Bytes, samples: List[Any], alignment: int, offset: int, origin: int):
     for sample in samples:
         buffer = sample2buffer(sample, get_buffer, sample2bytes, alignment, offset, origin)
-        read, unpacked = t.unpack_buffer(buffer, offset=offset, origin=origin)
+        read, unpacked = t.unpack_from(buffer, offset=offset, origin=origin)
         assert sample == unpacked or NAN_CHECK(sample, unpacked)
 
 
@@ -117,7 +117,7 @@ def assert_stream_pack(t: Packable, get_buffer: GetEmptyBuffer, sample2bytes: Sa
         expected = sample2buffer(sample, get_buffer, sample2bytes, alignment, offset, origin)
         with BytesIO(empty) as stream:
             stream.seek(origin + offset)
-            written = t.pack_stream(stream, sample, origin=origin)
+            written = t.pack_into(stream, sample, origin=origin)
             stream.seek(0)
             buffer = stream.read()
             assert len(expected) == len(buffer)
@@ -129,7 +129,7 @@ def assert_stream_unpack(t: Packable, get_buffer: GetEmptyBuffer, sample2bytes: 
         buffer = sample2buffer(sample, get_buffer, sample2bytes, alignment, offset, origin)
         with BytesIO(buffer) as stream:
             stream.seek(origin + offset)
-            read, unpacked = t.stream_unpack(stream, origin=origin)
+            read, unpacked = t.unpack_from(stream, origin=origin)
             assert sample == unpacked or NAN_CHECK(sample, unpacked)
 
 

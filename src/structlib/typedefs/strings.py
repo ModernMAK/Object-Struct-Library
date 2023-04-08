@@ -26,6 +26,10 @@ class StringBuffer(
     When unpacking; padding is preserved
     """
 
+    @property
+    def __typedef_annotation__(self) -> Type:
+        return str
+
     def pack(self, arg: str) -> bytes:
         encoded = arg.encode(self._encoding)
         buf = bytearray(encoded)

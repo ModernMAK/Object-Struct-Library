@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from io import BytesIO
-from typing import Any, Union, Tuple, BinaryIO
+from typing import Any, Union, Tuple, BinaryIO, Type
 
-from structlib.packing import PackableABC, nested_pack
+from structlib.packing import PackableABC
 
 from structlib.typedef import (
     TypeDefAlignableABC,
@@ -49,6 +49,10 @@ def _combined_size(*types: TypeDefSizableAndAlignable):
 
 
 class Struct(PackableABC[Tuple], TypeDefSizableABC, TypeDefAlignableABC):
+    @property
+    def __typedef_annotation__(self) -> Type:
+        return Tuple
+
     def pack(self, args: Tuple) -> bytes:
         # TODO; packed result does not account for struct alignment
         #   EG. if the data is packed into 13 bytes, with an alignment of 4 on the struct, we should pad to 16 bytes

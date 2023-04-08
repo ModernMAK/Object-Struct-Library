@@ -1,7 +1,6 @@
-from typing import Any, Optional, OrderedDict, Dict, Union
+from typing import Any, Optional
 
 from structlib.byteorder import ByteOrder
-from structlib.typeshed import ReadableBuffer
 
 
 def pretty_repr(_repr, msg) -> str:
@@ -36,4 +35,3 @@ def default_if_none(value: Any, default: Any) -> Any:
     Returns default if value is None
     """
     return default if value is None else value
-

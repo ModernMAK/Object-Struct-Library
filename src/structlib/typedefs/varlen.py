@@ -1,8 +1,8 @@
 from abc import abstractmethod
 from io import BytesIO
-from typing import Tuple, Any
+from typing import Tuple, Any, Optional
 
-from structlib.packing import IterPackableABC, T, Packable
+from structlib.packing import IterPackableABC, T, Packable, PackWritable, PackReadable
 from structlib.typedef import TypeDefAlignableABC, align_of
 from structlib.errors import PrettyNotImplementedError
 from structlib import streamio, bufferio
@@ -16,9 +16,7 @@ from structlib.typeshed import (
 from structlib.utils import default_if_none
 
 
-class LengthPrefixedTypeABC(
-    Packable, IterPackableABC, TypeDefAlignableABC
-):
+class LengthPrefixedTypeABC(Packable, IterPackableABC, TypeDefAlignableABC):
     """
     Represents a `Block` based `Length Prefixed` Primitive; most commonly representing collections like Arrays/strings/bytestrings.
     Internally, the `Block Size` only affects the value used when writing the length prefix, which can be used to prefix the # of elements instead of the # of bytes.
@@ -71,24 +69,37 @@ class LengthPrefixedTypeABC(
         )
         return b"".join([size_packed, aligned_packed])
 
-    def pack_buffer(
+    def _pack_buffer(
         self, buffer: WritableBuffer, arg: T, *, offset: int = 0, origin: int = 0
     ) -> int:
         packed = self.pack(arg)
         alignment = align_of(self)
         return bufferio.write(buffer, packed, alignment, offset=offset, origin=origin)
 
-    def pack_stream(
-        self, stream: WritableStream, arg: T, *, origin: int = 0
-    ) -> int:
+    def _pack_stream(self, stream: WritableStream, arg: T, *, origin: int = 0) -> int:
         packed = self.pack(arg)
         alignment = align_of(self)
         return streamio.write(stream, packed, alignment, origin=origin)
 
-    def unpack(self, buffer: bytes) -> T:
-        return self.unpack_buffer(buffer)[1]
+    def pack_into(
+        self,
+        writable: PackWritable,
+        arg: T,
+        *,
+        offset: Optional[int] = None,
+        origin: int = 0
+    ) -> int:
+        if isinstance(writable, WritableBuffer):
+            return self._pack_buffer(writable, arg, offset=offset or 0, origin=origin)
+        else:
+            if offset is not None:
+                raise NotImplementedError
+            return self._pack_stream(writable, arg, origin=origin)
 
-    def unpack_buffer(
+    def unpack(self, buffer: bytes) -> T:
+        return self._unpack_buffer(buffer)[1]
+
+    def _unpack_buffer(
         self, buffer: ReadableBuffer, *, offset: int = 0, origin: int = 0
     ) -> Tuple[int, T]:
         read, block_count = self._size_type._unpack_buffer(
@@ -101,7 +112,7 @@ class LengthPrefixedTypeABC(
         )  # var_read includes extra bytes read for alignment padding!
         return read + var_read, self._internal_unpack(var_buffer)
 
-    def stream_unpack(
+    def _unpack_stream(
         self, stream: ReadableStream, *, origin: int = 0
     ) -> Tuple[int, T]:
         read, block_count = self._size_type._unpack_stream(stream, origin=origin)
@@ -111,6 +122,16 @@ class LengthPrefixedTypeABC(
             stream, var_size, alignment, origin=origin
         )  # var_read includes extra bytes read for alignment padding!
         return read + var_read, self._internal_unpack(var_buffer)
+
+    def unpack_from(
+        self, readable: PackReadable, *, offset: Optional[int] = None, origin: int = 0
+    ) -> Tuple[int, T]:
+        if isinstance(readable, WritableBuffer):
+            return self._unpack_buffer(readable, offset=offset or 0, origin=origin)
+        else:
+            if offset is not None:
+                raise NotImplementedError
+            return self._unpack_stream(readable, origin=origin)
 
     def iter_pack(self, *args: T) -> bytes:
         with BytesIO() as stream:
@@ -123,7 +144,7 @@ class LengthPrefixedTypeABC(
     ) -> int:
         total_written = 0
         for arg in args:
-            total_written += self.pack_buffer(
+            total_written += self._pack_buffer(
                 buffer, arg, offset=total_written + offset, origin=origin
             )
         return total_written
@@ -131,14 +152,14 @@ class LengthPrefixedTypeABC(
     def iter_pack_stream(self, stream: WritableStream, *args: Any, origin: int) -> int:
         total_written = 0
         for arg in args:
-            total_written += self.pack_stream(stream, arg, origin=origin)
+            total_written += self._pack_stream(stream, arg, origin=origin)
         return total_written
 
     def iter_unpack(self, buffer: bytes, iter_count: int) -> Tuple[T, ...]:
         results = []
         total_read = 0
         for _ in range(iter_count):
-            read, result = self.unpack_buffer(buffer, offset=total_read)
+            read, result = self._unpack_buffer(buffer, offset=total_read)
             total_read += read
             results.append(result)
         return tuple(results)
@@ -154,7 +175,7 @@ class LengthPrefixedTypeABC(
         results = []
         total_read = 0
         for _ in range(iter_count):
-            read, result = self.unpack_buffer(
+            read, result = self._unpack_buffer(
                 buffer, offset=total_read + offset, origin=origin
             )
             total_read += read
@@ -167,7 +188,7 @@ class LengthPrefixedTypeABC(
         results = []
         total_read = 0
         for _ in range(iter_count):
-            read, result = self.stream_unpack(stream, origin=origin)
+            read, result = self._unpack_stream(stream, origin=origin)
             total_read += read
             results.append(result)
         return total_read, tuple(results)
