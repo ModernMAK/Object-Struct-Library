@@ -1,17 +1,29 @@
 from typing import List, Any
 
 import structlib.packing
-from structlib.byteorder import ByteOrder, resolve_byteorder, NativeEndian, BigEndian, LittleEndian, NetworkEndian
+from structlib.byteorder import (
+    ByteOrder,
+    resolve_byteorder,
+    NativeEndian,
+    BigEndian,
+    LittleEndian,
+    NetworkEndian,
+)
 from structlib.typedef import TypeDefAlignable, TypeDefByteOrder
 from structlib.typedefs import floating as _float
 from structlib.typedefs.floating import FloatDefinition
 from tests import rng
-from tests.typedefs.common_tests import AlignmentTests, DefinitionTests, ByteorderTests, PrimitiveTests, Sample2Bytes
+from tests.typedefs.common_tests import (
+    AlignmentTests,
+    PrimitiveTests,
+    Sample2Bytes,
+)
+from typedefs.common_tests import ByteorderTests, DefinitionTests
 from tests.typedefs.util import classproperty
 
 
 # AVOID using test as prefix
-class FloatTests(AlignmentTests,  ByteorderTests, DefinitionTests, PrimitiveTests):
+class FloatTests(AlignmentTests, ByteorderTests, DefinitionTests, PrimitiveTests):
     @classproperty
     def EQUAL_DEFINITIONS(self) -> List[Any]:
         if NativeEndian == "big":
@@ -28,39 +40,43 @@ class FloatTests(AlignmentTests,  ByteorderTests, DefinitionTests, PrimitiveTest
 
     @classproperty
     def NATIVE_PACKABLE(self) -> list[FloatDefinition]:
-        return [
-            FloatDefinition(self.NATIVE_SIZE * 8, byteorder=NativeEndian)
-        ]
+        return [FloatDefinition(self.NATIVE_SIZE * 8, byteorder=NativeEndian)]
 
     @classproperty
     def BIG_PACKABLE(self) -> list[FloatDefinition]:
-        return [
-            FloatDefinition(self.NATIVE_SIZE * 8, byteorder=BigEndian)
-        ]
+        return [FloatDefinition(self.NATIVE_SIZE * 8, byteorder=BigEndian)]
 
     @classproperty
     def LITTLE_PACKABLE(self) -> list[FloatDefinition]:
-        return [
-            FloatDefinition(self.NATIVE_SIZE * 8, byteorder=LittleEndian)
-        ]
+        return [FloatDefinition(self.NATIVE_SIZE * 8, byteorder=LittleEndian)]
 
     @classproperty
     def NETWORK_PACKABLE(self) -> list[FloatDefinition]:
-        return [
-            FloatDefinition(self.NATIVE_SIZE * 8, byteorder=NetworkEndian)
-        ]
+        return [FloatDefinition(self.NATIVE_SIZE * 8, byteorder=NetworkEndian)]
 
     @classproperty
     def ALIGNABLE_TYPEDEFS(self) -> List[TypeDefAlignable]:
-        return [*self.NATIVE_PACKABLE, *self.BIG_PACKABLE, *self.LITTLE_PACKABLE, *self.NETWORK_PACKABLE]
+        return [
+            *self.NATIVE_PACKABLE,
+            *self.BIG_PACKABLE,
+            *self.LITTLE_PACKABLE,
+            *self.NETWORK_PACKABLE,
+        ]
 
     @classproperty
     def BYTEORDER_TYPEDEFS(self) -> List[TypeDefByteOrder]:
-        return [*self.NATIVE_PACKABLE, *self.BIG_PACKABLE, *self.LITTLE_PACKABLE, *self.NETWORK_PACKABLE]
+        return [
+            *self.NATIVE_PACKABLE,
+            *self.BIG_PACKABLE,
+            *self.LITTLE_PACKABLE,
+            *self.NETWORK_PACKABLE,
+        ]
 
     @classmethod
     def get_sample2bytes(cls, byteorder: ByteOrder, alignment: int) -> Sample2Bytes:
-        struct = FloatDefinition.INTERNAL_STRUCTS[(cls.NATIVE_SIZE * 8, resolve_byteorder(byteorder))]
+        struct = FloatDefinition.INTERNAL_STRUCTS[
+            (cls.NATIVE_SIZE * 8, resolve_byteorder(byteorder))
+        ]
 
         def s2b(s):
             return struct.pack(s)
@@ -93,7 +109,9 @@ class FloatTests(AlignmentTests,  ByteorderTests, DefinitionTests, PrimitiveTest
         byteorder = NativeEndian
         r = []
         for seed in seeds:
-            gen = rng.generate_floats(s_per_seed, seed, byte_size * 8, byteorder=byteorder)
+            gen = rng.generate_floats(
+                s_per_seed, seed, byte_size * 8, byteorder=byteorder
+            )
             r.extend(gen)
         return r
 

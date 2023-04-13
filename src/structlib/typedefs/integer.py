@@ -101,8 +101,12 @@ class IntegerDefinition(
         else:
             return False
 
+    def __hash__(self):
+        hashable = (self._signed, self.__typedef_byteorder__, self.__typedef_alignment__, self.__typedef_native_size__)
+        return hash(hashable)
+
     def __str__(self):
-        name = "Int" if self._signed else "Uint"
+        name = "Int" if self._signed else "UInt"
         native_size = native_size_of(self)
         size = native_size * 8
         endian = byteorder_of(self)
@@ -110,7 +114,8 @@ class IntegerDefinition(
         return pretty_str(f"{name}{size}", endian, alignment)
 
     def __repr__(self):
-        return auto_pretty_repr(self)
+        return str(self)
+        # return auto_pretty_repr(self)
 
 
 Int8 = IntegerDefinition(1, True)

@@ -113,7 +113,11 @@ class TypeDefAnnotated(Protocol, metaclass=AttrProtocolMeta):
 
 
 def native_size_of(typedef: TypeDefSizable):
-    return typedef.__typedef_native_size__
+    # TODO ~ FIX HACK
+    native_size =  typedef.__typedef_native_size__
+    if isinstance(native_size,property):
+        native_size = native_size.fget(typedef)
+    return native_size
 
 
 def align_of(typedef: TypeDefAlignable) -> int:

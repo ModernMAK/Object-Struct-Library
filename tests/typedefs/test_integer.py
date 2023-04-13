@@ -1,265 +1,125 @@
-from typing import List, Any
+import itertools
 
-from tests import rng
-from tests.typedefs.common_tests import AlignmentTests, DefinitionTests, ByteorderTests, PrimitiveTests, Sample2Bytes
-from tests.typedefs.util import classproperty
-from structlib.byteorder import ByteOrder, resolve_byteorder, NetworkEndian, LittleEndian, NativeEndian, BigEndian
-from structlib.packing import Packable
-from structlib.typedef import TypeDefAlignable, TypeDefByteOrder
-from structlib.typedefs import integer as _integer
+import pytest
+
+from rng import generate_ints
+from structlib.byteorder import (
+    LittleEndian,
+    BigEndian,
+)
+from structlib.typedef import size_of, byteorder_of
 from structlib.typedefs.integer import IntegerDefinition
-from structlib.utils import default_if_none
+from tests.typedefs.common_tests import (
+    AlignmentTests,
+)
+from typedefs.common_tests import ByteorderTests, PackableTests, TypedefEqualityTests, TypedefInequalityTests, \
+    IOPackableTests
+
+_ALIGNMENTS = [1, 2, 4, 8]
+_BYTEORDERS = [BigEndian, LittleEndian]
+_SAMPLE_COUNT = 16
+_SEED = 8675309
+_ORIGINS = [0, 1, 2]
+_OFFSETS = [0, 1, 2]
+_TEST_TYPEDEF_ARGS = list(
+    itertools.product([1, 2, 4, 8, 16], [True, False], _BYTEORDERS)
+)
+_TEST_TYPEDEFS_EQUAL = {
+    (
+        IntegerDefinition(size, signed, alignment=size, byteorder=byteorder),
+        IntegerDefinition(size, signed, alignment=size, byteorder=byteorder),
+    )
+    for (size, signed, byteorder) in _TEST_TYPEDEF_ARGS
+}
+
+_TEST_TYPEDEFS = list(pair[0] for pair in _TEST_TYPEDEFS_EQUAL)
+_TEST_TYPEDEFS_UNEQUAL = list(itertools.permutations(_TEST_TYPEDEFS, 2))
 
 
-# AVOID using test as prefix
-class IntegerTests(AlignmentTests, ByteorderTests, PrimitiveTests, DefinitionTests):
-    @classproperty
-    def EQUAL_DEFINITIONS(self) -> List[Any]:
-        if NativeEndian == "big":
-            return [*self.NATIVE_PACKABLE, *self.BIG_PACKABLE, *self.NETWORK_PACKABLE]
-        else:
-            return [*self.NATIVE_PACKABLE, *self.LITTLE_PACKABLE]
+def get_packer(t):
+    signed = t._signed
+    size = size_of(t)
+    bom = byteorder_of(t)
 
-    @classproperty
-    def INEQUAL_DEFINITIONS(self) -> List[Any]:
-        if NativeEndian == "little":
-            return [*self.BIG_PACKABLE, *self.NETWORK_PACKABLE]
-        else:
-            return self.LITTLE_PACKABLE
+    def pack(v: int):
+        return v.to_bytes(size, bom, signed=signed)
 
-    @classproperty
-    def NATIVE_PACKABLE(self) -> List[Packable]:
-        return [
-            IntegerDefinition(self.NATIVE_SIZE, self.SIGNED, byteorder=NativeEndian)
-        ]
-
-    @classproperty
-    def BIG_PACKABLE(self) -> List[Packable]:
-        return [
-            IntegerDefinition(self.NATIVE_SIZE, self.SIGNED, byteorder=BigEndian)
-        ]
-
-    @classproperty
-    def LITTLE_PACKABLE(self) -> List[Packable]:
-        return [
-            IntegerDefinition(self.NATIVE_SIZE, self.SIGNED, byteorder=LittleEndian)
-        ]
-
-    @classproperty
-    def NETWORK_PACKABLE(self) -> List[Packable]:
-        return [
-            IntegerDefinition(self.NATIVE_SIZE, self.SIGNED, byteorder=NetworkEndian)
-        ]
-
-    @classproperty
-    def ALIGNABLE_TYPEDEFS(self) -> List[TypeDefAlignable]:
-        return [*self.NATIVE_PACKABLE, *self.BIG_PACKABLE, *self.LITTLE_PACKABLE, *self.NETWORK_PACKABLE]
-
-    @classproperty
-    def BYTEORDER_TYPEDEFS(self) -> List[TypeDefByteOrder]:
-        return [*self.NATIVE_PACKABLE, *self.BIG_PACKABLE, *self.LITTLE_PACKABLE, *self.NETWORK_PACKABLE]
-
-    @classmethod
-    def get_sample2bytes(cls, byteorder: ByteOrder = None, alignment: int = None) -> Sample2Bytes:
-        byteorder = default_if_none(byteorder, NativeEndian)
-        # alignment doesnt do anything? why'd i include it?
-        size = cls.NATIVE_SIZE
-        byteorder = resolve_byteorder(byteorder)
-        signed = cls.SIGNED
-
-        def s2b(s: int) -> bytes:
-            return int.to_bytes(s, size, byteorder, signed=signed)
-
-        return s2b
-
-    @classproperty
-    def OFFSETS(self) -> List[int]:
-        return [0, 1, 2, 4, 8]  # Normal power sequence
-
-    @classproperty
-    def ALIGNMENTS(self) -> List[int]:
-        return [1, 2, 4, 8]  # 0 not acceptable alignment
-
-    @classproperty
-    def ORIGINS(self) -> List[int]:
-        return [0, 1, 2, 4, 8]
-
-    @classproperty
-    def SAMPLE_COUNT(self) -> int:
-        # Keep it low for faster; less comprehensive, tests
-        return 16
-
-    @classproperty
-    def SAMPLES(self) -> List[int]:
-        s_count = self.SAMPLE_COUNT
-        seeds = self.SEEDS
-        s_per_seed = s_count // len(seeds)
-        signed = self.SIGNED
-        byte_size = self.NATIVE_SIZE
-        byteorder = NativeEndian
-        r = []
-        for seed in seeds:
-            gen = rng.generate_ints(s_per_seed, seed, byte_size * 8, signed, byteorder=byteorder)
-            r.extend(gen)
-        return r
-
-    @classproperty
-    def SEEDS(self) -> List[int]:
-        # Random seed (unique per sub-test) and fixed seed
-        return [hash(self.__name__), 5 * 23 * 2022]
-
-    @classproperty
-    def NATIVE_SIZE(self) -> int:
-        raise NotImplementedError
-
-    @classproperty
-    def SIGNED(self) -> bool:
-        raise NotImplementedError
-
-    @classproperty
-    def DEFINITION(self) -> IntegerDefinition:
-        raise NotImplementedError
-
-    @classproperty
-    def ALIGN(self) -> int:
-        return self.NATIVE_SIZE
+    return pack
 
 
-class TestInt8(IntegerTests):
-    @classproperty
-    def NATIVE_SIZE(self) -> int:
-        return 1
+_PACKERS = {t: get_packer(t) for t in _TEST_TYPEDEFS}
+_SAMPLES = {
+    t: list(
+        generate_ints(_SAMPLE_COUNT, _SEED, size_of(t) * 8, t._signed, byteorder_of(t))
+    )
+    for t in _TEST_TYPEDEFS
+}
 
-    @classproperty
-    def SIGNED(self) -> bool:
-        return True
-
-    @classproperty
-    def DEFINITION(self) -> IntegerDefinition:
-        return _integer.Int8
-
-
-class TestUInt8(IntegerTests):
-    @classproperty
-    def NATIVE_SIZE(self) -> int:
-        return 1
-
-    @classproperty
-    def SIGNED(self) -> bool:
-        return False
-
-    @classproperty
-    def DEFINITION(self) -> IntegerDefinition:
-        return _integer.UInt8
+_TEST_TYPEDEF_PACKABLE = []
+for t in _TEST_TYPEDEFS:
+    for sample in _SAMPLES[t]:
+        arg = t, sample, _PACKERS[t](sample)
+        _TEST_TYPEDEF_PACKABLE.append(arg)
 
 
-class TestInt16(IntegerTests):
-    @classproperty
-    def NATIVE_SIZE(self) -> int:
-        return 2
-
-    @classproperty
-    def SIGNED(self) -> bool:
-        return True
-
-    @classproperty
-    def DEFINITION(self) -> IntegerDefinition:
-        return _integer.Int16
+@pytest.mark.parametrize(
+    "alignment", _ALIGNMENTS, ids=[f"@{align}" for align in _ALIGNMENTS]
+)
+@pytest.mark.parametrize(
+    "alignable_typedef",
+    _TEST_TYPEDEFS,
+    ids=[str(x).replace("-", "_") for x in _TEST_TYPEDEFS],
+)
+class TestIntAlignment(AlignmentTests):
+    ...  # Obligatory 'do nothing' statement
 
 
-class TestUInt16(IntegerTests):
-    @classproperty
-    def NATIVE_SIZE(self) -> int:
-        return 2
-
-    @classproperty
-    def SIGNED(self) -> bool:
-        return False
-
-    @classproperty
-    def DEFINITION(self) -> IntegerDefinition:
-        return _integer.UInt16
+@pytest.mark.parametrize(
+    "byteorder", _BYTEORDERS, ids=[f"bom_{b[0]}e" for b in _BYTEORDERS]
+)
+@pytest.mark.parametrize(
+    "byteorder_typedef",
+    _TEST_TYPEDEFS,
+    ids=[str(x).replace("-", "_") for x in _TEST_TYPEDEFS],
+)
+class TestIntByteorder(ByteorderTests):
+    ...
 
 
-class TestInt32(IntegerTests):
-    @classproperty
-    def NATIVE_SIZE(self) -> int:
-        return 4
-
-    @classproperty
-    def SIGNED(self) -> bool:
-        return True
-
-    @classproperty
-    def DEFINITION(self) -> IntegerDefinition:
-        return _integer.Int32
+@pytest.mark.parametrize(
+    ["typedef", "equal_typedef"],
+    _TEST_TYPEDEFS_EQUAL,
+    ids=[f"{t} == {u}" for (t, u) in _TEST_TYPEDEFS_EQUAL],
+)
+class TestIntEquality(TypedefEqualityTests):
+    ...
 
 
-class TestUInt32(IntegerTests):
-    @classproperty
-    def NATIVE_SIZE(self) -> int:
-        return 4
-
-    @classproperty
-    def SIGNED(self) -> bool:
-        return False
-
-    @classproperty
-    def DEFINITION(self) -> IntegerDefinition:
-        return _integer.UInt32
+@pytest.mark.parametrize(
+    ["typedef", "unequal_typedef"],
+    _TEST_TYPEDEFS_UNEQUAL,
+    ids=[f"{t} != {u}" for (t, u) in _TEST_TYPEDEFS_UNEQUAL],
+)
+class TestIntInequality(TypedefInequalityTests):
+    ...
 
 
-class TestInt64(IntegerTests):
-    @classproperty
-    def NATIVE_SIZE(self) -> int:
-        return 8
-
-    @classproperty
-    def SIGNED(self) -> bool:
-        return True
-
-    @classproperty
-    def DEFINITION(self) -> IntegerDefinition:
-        return _integer.Int64
+@pytest.mark.parametrize(
+    ["typedef", "sample", "buffer"],
+    _TEST_TYPEDEF_PACKABLE,
+    ids=[f"`{t}` `{s}`" for (t, s, _) in _TEST_TYPEDEF_PACKABLE],
+)
+class TestIntPackable(PackableTests):
+    ...
 
 
-class TestUInt64(IntegerTests):
-    @classproperty
-    def NATIVE_SIZE(self) -> int:
-        return 8
-
-    @classproperty
-    def SIGNED(self) -> bool:
-        return False
-
-    @classproperty
-    def DEFINITION(self) -> IntegerDefinition:
-        return _integer.UInt64
-
-
-class TestInt128(IntegerTests):
-    @classproperty
-    def NATIVE_SIZE(self) -> int:
-        return 16
-
-    @classproperty
-    def SIGNED(self) -> bool:
-        return True
-
-    @classproperty
-    def DEFINITION(self) -> IntegerDefinition:
-        return _integer.Int128
-
-
-class TestUInt128(IntegerTests):
-    @classproperty
-    def NATIVE_SIZE(self) -> int:
-        return 16
-
-    @classproperty
-    def SIGNED(self) -> bool:
-        return False
-
-    @classproperty
-    def DEFINITION(self) -> IntegerDefinition:
-        return _integer.UInt128
+@pytest.mark.parametrize(
+    ["typedef", "sample", "buffer"],
+    _TEST_TYPEDEF_PACKABLE,
+    ids=[f"`{t}` `{s}`" for (t, s, _) in _TEST_TYPEDEF_PACKABLE],
+)
+@pytest.mark.parametrize("origin", _ORIGINS)
+@pytest.mark.parametrize("offset", _OFFSETS)
+@pytest.mark.parametrize("alignment", _ALIGNMENTS)
+class TestIntIOPackable(IOPackableTests):
+    ...

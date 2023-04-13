@@ -1,3 +1,54 @@
+import pytest
+
+from structlib.datastruct import datastruct
+from structlib.typedefs.integer import IntegerDefinition
+from structlib.typedefs.strings import PascalString
+from structlib.typedefs.varlen import LengthPrefixedBytes
+
+Int32 = IntegerDefinition(4, True, alignment=1, byteorder="little")
+FdaString = PascalString(Int32, encoding="ascii", alignment=1)
+FdaByteString = LengthPrefixedBytes(Int32, alignment=1)
+_Int32Max = (2 ** 31) - 1
+
+
+@datastruct
+class FileBurnInfo:
+    plugin: FdaString
+    version: Int32
+    name: FdaString
+    timestamp: FdaString  # TODO replace with a Timestamp struct?
+
+
+@datastruct
+class InfoBlock:
+    channels: Int32
+    sample_size: Int32
+    block_bitrate: Int32
+    sample_rate: Int32
+    begin_loop: Int32
+    end_loop: Int32
+    start_offset: Int32
+
+
+@datastruct
+class DataBlock:
+    data: FdaByteString
+
+
+@pytest.mark.parametrize("timestamp", ["April 11, 9:00:05 pm", "January 1, 7:32:54 am"])
+@pytest.mark.parametrize("name", ["Horus", "Yarrick"])
+@pytest.mark.parametrize("version", [1, 2, 4, 8, _Int32Max])
+@pytest.mark.parametrize("plugin", ["Example Plugin", "FBIF Plugin", "Relic Game Tool FDA Plugin"])
+class TestFBIF:
+
+    @staticmethod
+    def test_pack_symmetry(plugin, version, name, timestamp):
+        args = (plugin, version, name, timestamp)
+        inst = FileBurnInfo(*args)
+        packed = inst.pack()
+        unpacked = inst.unpack(packed)
+        assert unpacked == inst
+
 # # from __future__ import annotations
 # #
 # # from dataclasses import dataclass

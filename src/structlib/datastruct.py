@@ -1,17 +1,11 @@
 import copy
 import dataclasses
-from typing import Optional, Type, Tuple, TYPE_CHECKING
+from dataclasses import _is_dataclass_instance
+from typing import Optional, Tuple, TYPE_CHECKING
 
 from structlib.packing import Packable, T, PackReadable, PackWritable
 from structlib.typedef import TypeDefAnnotated
 from structlib.typedefs.structure import Struct
-
-
-def _is_packable(inst_or_klass):
-    return False
-
-
-from dataclasses import _is_dataclass_instance
 
 
 #
@@ -48,24 +42,6 @@ from dataclasses import _is_dataclass_instance
 #     # init_func = _create_func("__init__", init_args, body,globals=globals)
 #     # TODO: Fix qualname
 #     setattr(klass, "__init__", init_func)
-
-
-@dataclasses.dataclass
-class StructLike:
-    annotation: Type
-    byteorder: Optional[
-        "byteorder"
-    ]  # Byte order will default to the system byte order if not specified
-    alignment: Optional[
-        int
-    ]  # Alignment will default to the size of the fixed type OR 1 if the size is not fixed
-    fixed_size: Optional[
-        int
-    ]  # Static size of the type; None if the type has a variable size
-    # def pack(self, v) -> bytes:
-    #     raise NotImplementedError
-    #
-    # def unpack(self, ):
 
 
 # We don't need a separate StructField; we use type annotations to define the struct;
@@ -139,6 +115,7 @@ class _DataclassPackableMixin(Packable):
 
         klass.__typedef_annotation__ = cls.__typedef_annotation__
         klass.__typedef_alignment__ = cls.__typedef_alignment__
+        klass.__typedef_native_size__ = cls.__typedef_native_size__
 
     @property
     def __typedef_annotation__(self):
@@ -147,6 +124,10 @@ class _DataclassPackableMixin(Packable):
     @property
     def __typedef_alignment__(self):
         return self._struct.__typedef_alignment__
+
+    @property
+    def __typedef_native_size__(self):
+        return self._struct.__typedef_native_size__
 
     def pack(cls, arg: Optional[T] = None) -> bytes:
         if isinstance(cls, type):  # class call
@@ -158,19 +139,18 @@ class _DataclassPackableMixin(Packable):
             struct_args = astuple(cls)  # cls is self
             return cls._struct.pack(struct_args)
 
-    @classmethod
     def unpack(cls, buffer: bytes) -> T:
         args = cls._struct.unpack(buffer)
-        return cls.__init__(*args)
+        return cls.__class__(*args)
 
     @classmethod
     def pack_into(
-        cls,
-        writable: PackWritable,
-        arg: Optional[T] = None,
-        *,
-        offset: Optional[int] = None,
-        origin: int = 0,
+            cls,
+            writable: PackWritable,
+            arg: Optional[T] = None,
+            *,
+            offset: Optional[int] = None,
+            origin: int = 0,
     ) -> int:
         if isinstance(cls, type):  # class call
             struct_args = astuple(arg)
@@ -187,7 +167,73 @@ class _DataclassPackableMixin(Packable):
 
     @classmethod
     def unpack_from(
-        cls, readable: PackReadable, *, offset: Optional[int] = None, origin: int = 0
+            cls, readable: PackReadable, *, offset: Optional[int] = None, origin: int = 0
+    ) -> Tuple[int, T]:
+        return cls._struct.unpack_from(readable, offset=offset, origin=origin)
+
+
+class _EnumstructPackableMixin(Packable):
+    if TYPE_CHECKING:
+        _struct: Packable = None
+
+    @classmethod
+    def apply(cls, klass):
+        klass.pack = cls.pack
+        klass.unpack = cls.unpack
+        klass.pack_into = cls.pack_into
+        klass.unpack_from = cls.unpack_from
+
+        klass.__typedef_annotation__ = cls.__typedef_annotation__
+        klass.__typedef_alignment__ = cls.__typedef_alignment__
+        klass.__typedef_native_size__ = cls.__typedef_native_size__
+
+    @property
+    def __typedef_annotation__(self):
+        return self.__class__
+
+    @property
+    def __typedef_alignment__(self):
+        return self._struct.__typedef_alignment__
+
+    @property
+    def __typedef_native_size__(self):
+        return self._struct.__typedef_native_size__
+
+    def pack(cls, arg: Optional[T] = None) -> bytes:
+        if isinstance(cls, type):  # class call
+            return arg._struct.pack(arg)
+        else:
+            if arg is not None:
+                raise NotImplementedError
+            return cls._struct.pack(cls)
+
+    def unpack(cls, buffer: bytes) -> T:
+        args = cls._struct.unpack(buffer)
+        return cls.__class__(args)
+
+    @classmethod
+    def pack_into(
+            cls,
+            writable: PackWritable,
+            arg: Optional[T] = None,
+            *,
+            offset: Optional[int] = None,
+            origin: int = 0,
+    ) -> int:
+        if isinstance(cls, type):  # class call
+            return arg._struct.pack_into(
+                writable, arg, offset=offset, origin=origin
+            )
+        else:
+            if arg is not None:
+                raise NotImplementedError
+            return cls._struct.pack_into(
+                writable, cls, offset=offset, origin=origin
+            )
+
+    @classmethod
+    def unpack_from(
+            cls, readable: PackReadable, *, offset: Optional[int] = None, origin: int = 0
     ) -> Tuple[int, T]:
         return cls._struct.unpack_from(readable, offset=offset, origin=origin)
 
@@ -212,7 +258,7 @@ def datastruct(cls=None, /, alignment: int = None, **dataclass_kwargs):
             [t for t in klass._dstruct_annotations.values()]
         )
         _DataclassPackableMixin.apply(klass)
-        print(klass.__typedef_alignment__)
+        # print(klass.__typedef_alignment__)
         return klass
 
     if cls is None:
@@ -221,46 +267,16 @@ def datastruct(cls=None, /, alignment: int = None, **dataclass_kwargs):
         return wrap(cls)  # Called with @datastruct
 
 
-if __name__ == "__main__":
-    from structlib.typedefs.integer import Int8
-    from structlib.typedefs.strings import PascalString
-    from structlib.typedefs.boolean import Boolean
+def enumstruct(cls=None, /, backing_type: Packable=None):
+    def wrap(klass):
+        if backing_type is None:
+            raise NotImplementedError
 
-    TestString = PascalString(Int8)  # Pascal string supporting up to 256 chars
+        klass._struct = backing_type
+        _EnumstructPackableMixin.apply(klass)
+        return klass
 
-    @datastruct(alignment=2)
-    class Test:
-        age: Int8 = 8
-        male: Boolean = True
-        name: TestString = "Bobby Tables"
-
-    @datastruct(alignment=4)
-    class TestOuter:
-        grade: Int8 = 77
-        info: Test = Test()
-
-    @datastruct(alignment=1)
-    class TestOuterOuter:
-        teacher: Test = Test(88, False, "Ivanna Teeche")
-        student: TestOuter = TestOuter()
-        student2: TestOuter = TestOuter(77, Test(9, False, "Molly Bables"))
-
-    def _run_test(klass):
-        sample = klass()
-        print(sample)
-        print(sample._dstruct_annotations)
-        print(sample.__annotations__)
-        tuple = astuple(sample)
-        print(tuple)
-        dictionary = dataclasses.asdict(sample)
-        print(dictionary)
-        packed_manually = sample._struct.pack(tuple)
-        print(packed_manually)
-        packed_klass = klass.pack(sample)
-        print(packed_klass)
-        packed_self = sample.pack()
-        print(packed_self)
-
-    _run_test(Test)
-    _run_test(TestOuter)
-    _run_test(TestOuterOuter)
+    if cls is None:
+        return wrap
+    else:
+        return wrap(cls)

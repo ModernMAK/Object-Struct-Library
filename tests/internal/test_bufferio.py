@@ -3,9 +3,13 @@ from typing import Tuple
 from structlib import bufferio
 
 
-def create_sample_buffer(data: bytes, alignment: int = 1, offset: int = 0, origin: int = 0) -> Tuple[bytearray, int]:
+def create_sample_buffer(
+    data: bytes, alignment: int = 1, offset: int = 0, origin: int = 0
+) -> Tuple[bytearray, int]:
     prefix_size = alignment - (offset % alignment) if offset % alignment != 0 else 0
-    postfix_size = alignment - (len(data) % alignment) if len(data) % alignment != 0 else 0
+    postfix_size = (
+        alignment - (len(data) % alignment) if len(data) % alignment != 0 else 0
+    )
 
     buffer_size = origin + offset + len(data) + prefix_size + postfix_size
     buffer = bytearray(b"\0" * buffer_size)
@@ -31,8 +35,12 @@ def test_write():
 
         wrote = bufferio.write(result_buffer, data, *args)
 
-        assert result_buffer == sample, (f"Alignment: {args[0]}, Offset: {args[1]}, Origin: {args[2]}")
-        assert wrote == sample_wrote, (f"Alignment: {args[0]}, Offset: {args[1]}, Origin: {args[2]}")
+        assert (
+            result_buffer == sample
+        ), f"Alignment: {args[0]}, Offset: {args[1]}, Origin: {args[2]}"
+        assert (
+            wrote == sample_wrote
+        ), f"Alignment: {args[0]}, Offset: {args[1]}, Origin: {args[2]}"
 
 
 def test_pad_data_to_boundary():
@@ -48,8 +56,12 @@ def test_read():
     for args, sample, sample_wrote in gen_sample_buffers(data):
         read_size, read = bufferio.read(sample, len(data), *args)
 
-        assert read == data, (f"Alignment: {args[0]}, Offset: {args[1]}, Origin: {args[2]}")
-        assert read_size == sample_wrote, (f"Alignment: {args[0]}, Offset: {args[1]}, Origin: {args[2]}")
+        assert (
+            read == data
+        ), f"Alignment: {args[0]}, Offset: {args[1]}, Origin: {args[2]}"
+        assert (
+            read_size == sample_wrote
+        ), f"Alignment: {args[0]}, Offset: {args[1]}, Origin: {args[2]}"
 
 
 def test_create_padding_buffer():
@@ -58,4 +70,3 @@ def test_create_padding_buffer():
             result = bufferio.create_padding_buffer(pad_size, pad_value)
             expected = bytes([pad_value] * pad_size)
             assert expected == result
-

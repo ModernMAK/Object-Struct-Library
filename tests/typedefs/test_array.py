@@ -3,12 +3,31 @@ from typing import List, Literal, Any
 
 import structlib.packing
 from tests import rng
-from tests.typedefs.common_tests import AlignmentTests, DefinitionTests, ByteorderTests, PrimitiveTests, Sample2Bytes
-from tests.typedefs.util import classproperty
-from structlib.byteorder import ByteOrder, resolve_byteorder, NativeEndian, BigEndian, LittleEndian, NetworkEndian
+# from tests.typedefs.common_tests import (
+#     AlignmentTests,
+#     # PrimitiveTests,
+#     # Sample2Bytes,
+# )
+# from typedefs.common_tests import ByteorderTests, DefinitionTests
+# from tests.typedefs.util import classproperty
+from structlib.byteorder import (
+    ByteOrder,
+    resolve_byteorder,
+    NativeEndian,
+    BigEndian,
+    LittleEndian,
+    NetworkEndian,
+)
 from structlib.packing import Packable
-from structlib.typedef import native_size_of, TypeDefAlignable, align_of, TypeDefByteOrder, byteorder_of, byteorder_as, \
-    calculate_padding
+from structlib.typedef import (
+    native_size_of,
+    TypeDefAlignable,
+    align_of,
+    TypeDefByteOrder,
+    byteorder_of,
+    byteorder_as,
+    calculate_padding,
+)
 from structlib.typedefs import integer, floating
 from structlib.typedefs.array import Array
 from structlib.typedefs.floating import FloatDefinition
@@ -138,7 +157,9 @@ class IntegerArrayTests(ArrayTests, ByteorderTests):
         padding = bytearray(padded_size)
 
         def wrapper(s: List[int]) -> bytes:
-            converted = [int.to_bytes(_, internal_size, byteorder, signed=signed) for _ in s]
+            converted = [
+                int.to_bytes(_, internal_size, byteorder, signed=signed) for _ in s
+            ]
             full = padding.join(converted)
             # Append padding to last element
             full.extend(padding)
@@ -225,7 +246,6 @@ class TestUInt128(IntegerArrayTests):
 
 
 class FloatArrayTests(ArrayTests, ByteorderTests):
-
     @classproperty
     def BYTEORDER_TYPEDEFS(self) -> List[TypeDefByteOrder]:
         return [Array(self.ARR_SIZE, self.ARR_TYPE)]
@@ -251,7 +271,9 @@ class FloatArrayTests(ArrayTests, ByteorderTests):
         _type: FloatDefinition = cls.ARR_TYPE
         byte_size = native_size_of(_type)
         padded_size = calculate_padding(alignment, byte_size)
-        struct = FloatDefinition.INTERNAL_STRUCTS[(byte_size * 8, resolve_byteorder(byteorder))]
+        struct = FloatDefinition.INTERNAL_STRUCTS[
+            (byte_size * 8, resolve_byteorder(byteorder))
+        ]
         padding = bytearray(padded_size)
 
         def wrapper(s: List[float]) -> bytes:

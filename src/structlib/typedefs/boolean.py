@@ -2,7 +2,7 @@ from typing import List, Tuple, Type
 
 from structlib.packing import IterPackableABC, PackableABC
 from structlib.typedef import TypeDefSizableABC, TypeDefAlignableABC, align_of
-from structlib.utils import default_if_none, auto_pretty_repr
+from structlib.utils import default_if_none
 
 
 class BooleanDefinition(
@@ -37,6 +37,10 @@ class BooleanDefinition(
         else:
             return False
 
+    def __hash__(self):
+        return hash(self.__typedef_alignment__)
+
+
     def _to_bytes(self, *args: bool) -> bytes:
         alignment = align_of(self)
         padding = alignment - self.NATIVE_SIZE
@@ -70,11 +74,12 @@ class BooleanDefinition(
 
     def __str__(self):
         alignment = align_of(self)
-        str_align = f" @{alignment}" if alignment is None else ""
+        str_align = f" @{alignment}" if alignment is not None or alignment != 1 else ""
         return f"Boolean{str_align}"
 
     def __repr__(self):
-        return auto_pretty_repr(self)
+        return str(self)
+        # return auto_pretty_repr(self)
 
 
 Boolean = BooleanDefinition()

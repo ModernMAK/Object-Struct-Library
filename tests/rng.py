@@ -12,7 +12,9 @@ def generate_random_chunks(chunk_size: int, chunk_count: int, seed: int):
         yield r.randbytes(chunk_size)
 
 
-def generate_ints(chunk_count: int, seed: int, int_bit_size: int, signed: bool, byteorder: ByteOrder):
+def generate_ints(
+    chunk_count: int, seed: int, int_bit_size: int, signed: bool, byteorder: ByteOrder
+):
     for _ in generate_random_chunks(int_bit_size // 8, chunk_count, seed):
         yield int.from_bytes(_, byteorder, signed=signed)
 
@@ -32,7 +34,9 @@ def generate_seeds(count: int, seed: int):
     return generate_ints(count, seed, SEED_SIZE, True, sys.byteorder)
 
 
-def generate_floats(chunk_count: int, seed: int, float_bit_size: int, byteorder: ByteOrder):
+def generate_floats(
+    chunk_count: int, seed: int, float_bit_size: int, byteorder: ByteOrder
+):
     float_struct = FloatDefinition.INTERNAL_STRUCTS[(float_bit_size, byteorder)]
     for _ in generate_random_chunks(float_bit_size // 8, chunk_count, seed):
         yield float_struct.unpack(_)[0]

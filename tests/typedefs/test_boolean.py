@@ -1,95 +1,110 @@
-from typing import List, Any
+import itertools
 
-from structlib.byteorder import ByteOrder
-from structlib.packing import Packable
-from structlib.typedef import TypeDefAlignable
-from structlib.typedefs import boolean
+import pytest
+
+from rng import generate_bools
+from structlib.typedef import align_of
 from structlib.typedefs.boolean import BooleanDefinition
-from tests import rng
-from tests.typedefs.common_tests import AlignmentTests, DefinitionTests, PrimitiveTests, Sample2Bytes
-from tests.typedefs.util import classproperty
+from tests.typedefs.common_tests import (
+    AlignmentTests, IOPackableTests, PackableTests, TypedefInequalityTests, TypedefEqualityTests, )
+
+_ALIGNMENTS = [1, 2, 4, 8]
+_SAMPLE_COUNT = 16
+_SEED = 8675309
+_ORIGINS = [0, 1, 2]
+_OFFSETS = [0, 1, 2]
+_TEST_TYPEDEF_ARGS = _ALIGNMENTS
+_TEST_TYPEDEFS_EQUAL = {
+    (
+        BooleanDefinition(alignment=alignment),
+        BooleanDefinition(alignment=alignment)
+    )
+    for alignment in _TEST_TYPEDEF_ARGS
+}
+
+_TEST_TYPEDEFS = list(pair[0] for pair in _TEST_TYPEDEFS_EQUAL)
+_TEST_TYPEDEFS_UNEQUAL = list(itertools.permutations(_TEST_TYPEDEFS, 2))
 
 
-# AVOID using test as prefix
-class BooleanTests(AlignmentTests, DefinitionTests, PrimitiveTests):
-    @classproperty
-    def EQUAL_DEFINITIONS(self) -> List[Any]:
-        return [BooleanDefinition()]
+def get_packer(t, use_io:bool):
+    alignment = align_of(t)
 
-    @classproperty
-    def INEQUAL_DEFINITIONS(self) -> List[Any]:
-        return [BooleanDefinition(alignment=2)]
-
-    @classproperty
-    def NATIVE_PACKABLE(self) -> List[Packable]:
-        return [BooleanDefinition()]
-
-    @classproperty
-    def BIG_PACKABLE(self) -> List[Packable]:
-        return []
-
-    @classproperty
-    def LITTLE_PACKABLE(self) -> List[Packable]:
-        return []
-
-    @classproperty
-    def NETWORK_PACKABLE(self) -> List[Packable]:
-        return []
-
-    @classproperty
-    def OFFSETS(self) -> List[int]:
-        return [0, 1, 2, 4, 8]  # Normal power sequence
-
-    @classproperty
-    def ALIGNMENTS(self) -> List[int]:
-        return [1, 2, 4, 8]  # 0 not acceptable alignment
-
-    @classproperty
-    def ALIGNABLE_TYPEDEFS(self) -> List[TypeDefAlignable]:
-        return [BooleanDefinition()]
-
-    @classproperty
-    def ORIGINS(self) -> List[int]:
-        return [0, 1, 2, 4, 8]
-
-    @classproperty
-    def SAMPLE_COUNT(self) -> int:
-        # Keep it low for faster; less comprehensive, tests
-        return 16
-
-    @classproperty
-    def SAMPLES(self) -> List[bool]:
-        s_count = self.SAMPLE_COUNT
-        seeds = self.SEEDS
-        s_per_seed = s_count // len(seeds)
-        r = []
-        for seed in seeds:
-            gen = rng.generate_bools(s_per_seed, seed)
-            r.extend(gen)
-        return r
-
-    @classproperty
-    def SEEDS(self) -> List[int]:
-        # Random seed (unique per sub-test) and fixed seed
-        return [hash(self.__name__), 5 * 23 * 2022]
-
-    @classproperty
-    def NATIVE_SIZE(self) -> int:
-        return 1
-
-    @classproperty
-    def ALIGN(self) -> int:
-        return self.NATIVE_SIZE
-
-    @classmethod
-    def get_sample2bytes(cls, endian: ByteOrder, alignment: int) -> Sample2Bytes:
-        def s2b(b:bool) -> bytes:
-            return bytes([0x01 if b else 0x00])
-        return s2b
+    def pack(v: bool):
+        bool_buf = BooleanDefinition.TRUE_BUF if v else BooleanDefinition.FALSE_BUF
+        if use_io:
+            return bool_buf
+        else:
+            return bool_buf + b"\0" * (alignment - 1)
 
 
+    return pack
 
-class TestBoolean(BooleanTests):
-    @classproperty
-    def DEFINITION(self) -> BooleanDefinition:
-        return boolean.Boolean
+
+_PACKERS = {t: get_packer(t,False) for t in _TEST_TYPEDEFS}
+_PACKERSIO = {t: get_packer(t,True) for t in _TEST_TYPEDEFS}
+_SAMPLES = {
+    t: list(
+        generate_bools(_SAMPLE_COUNT, _SEED)
+    )
+    for t in _TEST_TYPEDEFS
+}
+
+_TEST_TYPEDEF_PACKABLE = []
+_TEST_TYPEDEF_PACKABLEIO = []
+for t in _TEST_TYPEDEFS:
+    for sample in _SAMPLES[t]:
+        arg = t, sample, _PACKERS[t](sample)
+        argio = t, sample, _PACKERSIO[t](sample)
+        _TEST_TYPEDEF_PACKABLE.append(arg)
+        _TEST_TYPEDEF_PACKABLEIO.append(argio)
+
+
+@pytest.mark.parametrize(
+    "alignment", _ALIGNMENTS, ids=[f"@{align}" for align in _ALIGNMENTS]
+)
+@pytest.mark.parametrize(
+    "alignable_typedef",
+    _TEST_TYPEDEFS,
+    ids=[str(x).replace("-", "_") for x in _TEST_TYPEDEFS],
+)
+class TestBooleanAlignment(AlignmentTests):
+    ...  # Obligatory 'do nothing' statement
+
+
+@pytest.mark.parametrize(
+    ["typedef", "equal_typedef"],
+    _TEST_TYPEDEFS_EQUAL,
+    ids=[f"{t} == {u}" for (t, u) in _TEST_TYPEDEFS_EQUAL],
+)
+class TestBooleanEquality(TypedefEqualityTests):
+    ...
+
+
+@pytest.mark.parametrize(
+    ["typedef", "unequal_typedef"],
+    _TEST_TYPEDEFS_UNEQUAL,
+    ids=[f"{t} != {u}" for (t, u) in _TEST_TYPEDEFS_UNEQUAL],
+)
+class TestBooleanInequality(TypedefInequalityTests):
+    ...
+
+
+@pytest.mark.parametrize(
+    ["typedef", "sample", "buffer"],
+    _TEST_TYPEDEF_PACKABLE,
+    ids=[f"`{t}` `{s}`" for (t, s, _) in _TEST_TYPEDEF_PACKABLE],
+)
+class TestBooleanPackable(PackableTests):
+    ...
+
+
+@pytest.mark.parametrize(
+    ["typedef", "sample", "buffer"],
+    _TEST_TYPEDEF_PACKABLEIO,
+    ids=[f"`{t}` `{s}`" for (t, s, _) in _TEST_TYPEDEF_PACKABLEIO],
+)
+@pytest.mark.parametrize("origin", _ORIGINS)
+@pytest.mark.parametrize("offset", _OFFSETS)
+@pytest.mark.parametrize("alignment", _ALIGNMENTS)
+class TestBooleanIOPackable(IOPackableTests):
+    ...

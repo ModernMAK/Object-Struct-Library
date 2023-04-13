@@ -1,7 +1,12 @@
 from typing import List, Any
 
 from tests import rng
-from tests.typedefs.common_tests import AlignmentTests, DefinitionTests, ByteorderTests, PrimitiveTests, Sample2Bytes
+from tests.typedefs.common_tests import (
+    AlignmentTests,
+    PrimitiveTests,
+    Sample2Bytes,
+)
+from typedefs.common_tests import ByteorderTests, DefinitionTests
 from tests.typedefs.util import classproperty
 from structlib.byteorder import ByteOrder
 from structlib.packing import Packable
@@ -42,14 +47,16 @@ class TestString(PrimitiveTests, DefinitionTests, AlignmentTests):
         return []
 
     @classmethod
-    def get_sample2bytes(cls, endian: ByteOrder = None, alignment: int = None) -> Sample2Bytes:
+    def get_sample2bytes(
+        cls, endian: ByteOrder = None, alignment: int = None
+    ) -> Sample2Bytes:
         size = cls.ARR_SIZE
         ENCODING = cls.ENCODING
 
         def s2b(s: str) -> bytes:
             buf = bytearray(size)
             encoded = s.encode(ENCODING)
-            buf[0:len(encoded)] = encoded
+            buf[0 : len(encoded)] = encoded
             return buf
 
         return s2b
