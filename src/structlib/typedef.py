@@ -112,6 +112,10 @@ class TypeDefAnnotated(Protocol, metaclass=AttrProtocolMeta):
         raise PrettyNotImplementedError(self, self.__typedef_annotation__)
 
 
+def annotation_of(typedef: TypeDefAnnotated) -> Type:
+    return typedef.__typedef_annotation__
+
+
 def native_size_of(typedef: TypeDefSizable):
     # TODO ~ FIX HACK
     native_size = typedef.__typedef_native_size__

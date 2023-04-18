@@ -1,7 +1,6 @@
 import copy
 import dataclasses
 import sys
-from dataclasses import _is_dataclass_instance
 from functools import partial
 from types import NoneType
 from typing import Optional, Tuple, TYPE_CHECKING, List, Dict, Callable
@@ -68,58 +67,6 @@ def _inject_func(klass, func_name, func):
 # class StructField(dataclasses.Field):
 
 
-def astuple(obj, *, tuple_factory=tuple):
-    """Return the fields of a dataclass instance as a new tuple of field values.
-
-    Example usage::
-
-      @dataclass
-      class C:
-          x: int
-          y: int
-
-    c = C(1, 2)
-    assert astuple(c) == (1, 2)
-
-    If given, 'tuple_factory' will be used instead of built-in tuple.
-    The function applies recursively to field values that are
-    dataclass instances. This will also look into built-in containers:
-    tuples, lists, and dicts.
-    """
-
-    if not _is_dataclass_instance(obj):
-        raise TypeError("astuple() should be called on dataclass instances")
-
-    result = []
-    for f in dataclasses.fields(obj):
-        value = _astuple_inner(getattr(obj, f.name), tuple_factory)
-        result.append(value)
-    return tuple_factory(result)
-
-
-def _astuple_inner(obj, tuple_factory):
-    if isinstance(obj, tuple) and hasattr(obj, "_fields"):
-        # obj is a namedtuple.  Recurse into it, but the returned
-        # object is another namedtuple of the same type.  This is
-        # similar to how other list- or tuple-derived classes are
-        # treated (see below), but we just need to create them
-        # differently because a namedtuple's __init__ needs to be
-        # called differently (see bpo-34363).
-        return type(obj)(*[_astuple_inner(v, tuple_factory) for v in obj])
-    elif isinstance(obj, (list, tuple)):
-        # Assume we can create an object of this type by passing in a
-        # generator (which is not true for namedtuples, handled
-        # above).
-        return type(obj)(_astuple_inner(v, tuple_factory) for v in obj)
-    elif isinstance(obj, dict):
-        return type(obj)(
-            (_astuple_inner(k, tuple_factory), _astuple_inner(v, tuple_factory))
-            for k, v in obj.items()
-        )
-    else:
-        return copy.deepcopy(obj)
-
-
 _datastruct_tuplify_name = "_datastruct_args"
 
 
@@ -136,31 +83,7 @@ def _datastruct_tuplify(dclass, globals: Optional[Dict] = None) -> Tuple[str, Ca
     return NAME, _create_func(NAME, ARGS, BODY, RTYPE, globals=globals, locals=locals)
 
 
-# Breaks debugging chain (can't find frame)!
-def _datastruct_pack_self(dclass, globals: Optional[Dict] = None) -> Tuple[str, Callable]:
-    globals = _get_globals(dclass) if globals is None else globals
-    locals = {"NoneType": NoneType}
-
-    NAME = "pack"
-
-    RTYPE = "bytes"
-
-    _self_arg = "self"
-    _packable_arg = "arg:NoneType=None"
-    ARGS = [_self_arg, _packable_arg]
-
-    _arg_parts = [f"self.{f.name}" for f in dataclasses.fields(dclass)]
-    STRUCT_ARG_NAME = "struct_args"
-    _arg_line = f"{STRUCT_ARG_NAME} = ({', '.join(_arg_parts)})"
-    STRUCT_DELEGATE_NAME = "_struct"
-    _delegate_line = f"packed:bytes = self.__class__.{STRUCT_DELEGATE_NAME}.pack({STRUCT_ARG_NAME})"
-    _result_line = "return packed"
-    BODY = [_arg_line, _delegate_line, _result_line]
-
-    return NAME, _create_func(NAME, ARGS, BODY, RTYPE, locals=locals, globals=globals)
-
-
-# DO NOT INJECT COMMON FUNCITONS
+# DO NOT INJECT COMMON FUNCTIONS
 #   I'd prefer to have the callstack preserved for debugging ~ This is complicated enough without hiding information.
 
 class hybridmethod:
@@ -189,6 +112,39 @@ class hybridmethod:
     #     pass
 
 
+class classproperty:
+    def __init__(self, fget=None, fset=None, fdel=None, doc=None):
+        self._fget = fget
+        self._fset = fset
+        self._fdel = fdel
+        self._doc = doc
+
+    def __doc__(self):
+        return self._doc
+
+    def getter(self, func):
+        self._fget = func
+
+    def setter(self, func):
+        self._fset = func
+
+    def deleter(self, func):
+        self._fdel = func
+
+    def __get__(self, instance, owner):
+        return self._fget(owner)
+
+    def __set__(self, instance, value):
+        return self._fset(instance,value)
+
+    def __delete__(self, instance):
+        return self._fdel(instance)
+
+    # def __call__(self, *args, **kwargs):
+    #     print("X")
+    #     pass
+
+
 class _DatastructPackable:
     @classmethod
     def apply(cls, klass):
@@ -198,9 +154,10 @@ class _DatastructPackable:
         klass.unpack = classmethod(cls.unpack)
         klass.unpack_from = classmethod(cls.unpack_from)
 
-        klass.__typedef_annotation__ = property(cls.__typedef_annotation__)
-        klass.__typedef_alignment__ = property(cls.__typedef_alignment__)
-        klass.__typedef_native_size__ = property(cls.__typedef_native_size__)
+        klass.__typedef_annotation__ = classproperty(cls.__typedef_annotation__)
+        klass.__typedef_alignment__ = classproperty(cls.__typedef_alignment__)
+        klass.__typedef_native_size__ = classproperty(cls.__typedef_native_size__)
+        klass.__typedef_align_as__ = classmethod(cls.__typedef_align_as__)
 
     @staticmethod
     def pack(self, arg: NoneType = None):
@@ -215,16 +172,16 @@ class _DatastructPackable:
         return cls._struct.pack(struct_args)
 
     @staticmethod
-    def __typedef_annotation__(self):
-        return self.__class__
+    def __typedef_annotation__(cls):
+        return cls
 
     @staticmethod
-    def __typedef_alignment__(self):
-        return self._struct.__typedef_alignment__
+    def __typedef_alignment__(cls):
+        return cls._struct.__typedef_alignment__
 
     @staticmethod
-    def __typedef_native_size__(self):
-        return self._struct.__typedef_native_size__
+    def __typedef_native_size__(cls):
+        return cls._struct.__typedef_native_size__
 
     @staticmethod
     def unpack(cls, buffer: bytes) -> T:
@@ -240,7 +197,7 @@ class _DatastructPackable:
     def pack_into(self, writable: PackWritable, arg: NoneType = None, *, offset: Optional[int] = None, origin: int = 0):
         if arg is not None:
             raise NotImplementedError
-        struct_args = getattr(arg, _datastruct_tuplify_name)()
+        struct_args = getattr(self, _datastruct_tuplify_name)()
         return self._struct.pack_into(writable, struct_args, offset=offset, origin=origin)
 
     @staticmethod
@@ -250,6 +207,13 @@ class _DatastructPackable:
         read, args = cls._struct.unpack_from(readable, offset=offset, origin=origin)
         return read, cls(*args)
 
+    @staticmethod
+    def __typedef_align_as__(cls, alignment):
+        raise NotImplementedError("DataStruct does not support post-def alignment assignment!")
+
+
+
+
 class _EnumstructPackable:
     @classmethod
     def apply(cls, klass):
@@ -258,9 +222,10 @@ class _EnumstructPackable:
         klass.unpack = classmethod(cls.unpack)
         klass.unpack_from = classmethod(cls.unpack_from)
 
-        klass.__typedef_annotation__ = property(cls.__typedef_annotation__)
-        klass.__typedef_alignment__ = property(cls.__typedef_alignment__)
-        klass.__typedef_native_size__ = property(cls.__typedef_native_size__)
+        klass.__typedef_annotation__ = classproperty(cls.__typedef_annotation__)
+        klass.__typedef_alignment__ = classproperty(cls.__typedef_alignment__)
+        klass.__typedef_native_size__ = classproperty(cls.__typedef_native_size__)
+        klass.__typedef_align_as__ = classmethod(cls.__typedef_align_as__)
 
     @staticmethod
     def pack(self, arg: NoneType = None):
@@ -309,6 +274,10 @@ class _EnumstructPackable:
     ) -> Tuple[int, T]:
         read, arg = cls._struct.unpack_from(readable, offset=offset, origin=origin)
         return read, cls(arg)
+
+    @staticmethod
+    def __typedef_align_as__(cls, alignment):
+        raise NotImplementedError("EnumStruct does not support post-def alignment assignment!")
 
 
 def datastruct(cls=None, /, alignment: int = None, **dataclass_kwargs):
