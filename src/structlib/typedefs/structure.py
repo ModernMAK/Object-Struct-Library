@@ -62,7 +62,7 @@ class Struct(PackableABC[Tuple], TypeDefSizableABC, TypeDefAlignableABC):
             written = 0
             buffer = bytearray(size_of(self))
             for arg, t in zip(args, self._types):
-                packed = t.pack(arg=arg)
+                packed = t.pack(arg)
                 # TODO; check if this fails when t is Struct because Tuple/List is wrapped
                 written += bufferio.write(
                     buffer, packed, align_of(t), written, origin=0
@@ -85,7 +85,7 @@ class Struct(PackableABC[Tuple], TypeDefSizableABC, TypeDefAlignableABC):
         total_read = 0
         results = []
         for t in self._types:
-            read, result = t._unpack_buffer(buffer, offset=total_read, origin=0)
+            read, result = t.unpack_from(buffer, offset=total_read, origin=0)
             results.append(result)
             total_read += read
         return tuple(results)

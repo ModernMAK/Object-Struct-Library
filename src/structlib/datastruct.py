@@ -1,31 +1,49 @@
 import copy
 import dataclasses
+import sys
 from dataclasses import _is_dataclass_instance
-from typing import Optional, Tuple, TYPE_CHECKING
+from functools import partial
+from types import NoneType
+from typing import Optional, Tuple, TYPE_CHECKING, List, Dict, Callable
 
 from structlib.packing import Packable, T, PackReadable, PackWritable
 from structlib.typedef import TypeDefAnnotated
 from structlib.typedefs.structure import Struct
 
 
+def _get_globals(klass):
+    if klass.__module__ in sys.modules:
+        module = sys.modules[klass.__module__]
+        return module.__dict__
+    else:
+        return {}
+
+
 #
-# def _create_func(name, arguments: List[str], body: List[str], rtype: Optional[str] = "", globals: Optional[Dict] = None,
-#                  locals=None):
-#     # locals = locals or {}
-#
-#     return_def = f" -> {rtype}" if rtype != "" else ""
-#     func_def = f"def {name} ({', '.join(arguments)}){return_def}:"
-#     body_def = "\n\t".join(body)
-#     full_def = f"{func_def}\n\t{body_def}"
-#     injectable_def = full_def.replace("\t", "\t\t")  # Need to be one level deeper
-#     injector = "inject"
-#     injector_def = f"def {injector}():\n\t{injectable_def}\n\treturn {name}"
-#     resultspace = {}
-#
-#     # create the injector
-#     exec(injector_def, globals, resultspace)
-#     # Run the injector
-#     return resultspace[injector]()
+def _create_func(name, arguments: List[str], body: List[str], rtype: Optional[str] = "", globals: Optional[Dict] = None,
+                 locals=None):
+    locals = locals or {}
+    return_def = f" -> {rtype}" if rtype != "" else ""
+    func_def = f"def {name} ({', '.join(arguments)}){return_def}:"
+    body_def = "\n\t".join(body)
+    full_def = f"{func_def}\n\t{body_def}"
+    injectable_def = full_def.replace("\t", "\t\t")  # Need to be one level deeper
+    INJECTOR_NAME = "inject"
+    INJECTOR_ARGS = ",".join(locals.keys())
+    injector_def = f"def {INJECTOR_NAME}({INJECTOR_ARGS}):\n\t{injectable_def}\n\treturn {name}"
+    resultspace = {}
+
+    # create the injector
+    exec(injector_def, globals, resultspace)
+    # Run the injector
+    return resultspace[INJECTOR_NAME](**locals)
+
+
+def _inject_func(klass, func_name, func):
+    if hasattr(klass, func_name):
+        raise TypeError(f"{klass} has already defines `{func_name}`!")
+    func.__qualname__ = f"{klass.__qualname__}.{func_name}"
+    setattr(klass, func_name, func)
 
 
 # def _dstruct_add_init(klass):
@@ -102,140 +120,195 @@ def _astuple_inner(obj, tuple_factory):
         return copy.deepcopy(obj)
 
 
-class _DataclassPackableMixin(Packable):
-    if TYPE_CHECKING:
-        _struct: Packable = None
+_datastruct_tuplify_name = "_datastruct_args"
 
+
+def _datastruct_tuplify(dclass, globals: Optional[Dict] = None) -> Tuple[str, Callable]:
+    globals = _get_globals(dclass) if globals is None else globals
+    locals = {"Tuple": Tuple}
+    NAME = _datastruct_tuplify_name  # "_datastruct_args"
+    RTYPE = "Tuple"
+    _self_arg = "self"
+    ARGS = [_self_arg]
+    _arg_parts = [f"self.{f.name}" for f in dataclasses.fields(dclass)]
+    _result_line = f"return ({', '.join(_arg_parts)})"
+    BODY = [_result_line]
+    return NAME, _create_func(NAME, ARGS, BODY, RTYPE, globals=globals, locals=locals)
+
+
+# Breaks debugging chain (can't find frame)!
+def _datastruct_pack_self(dclass, globals: Optional[Dict] = None) -> Tuple[str, Callable]:
+    globals = _get_globals(dclass) if globals is None else globals
+    locals = {"NoneType": NoneType}
+
+    NAME = "pack"
+
+    RTYPE = "bytes"
+
+    _self_arg = "self"
+    _packable_arg = "arg:NoneType=None"
+    ARGS = [_self_arg, _packable_arg]
+
+    _arg_parts = [f"self.{f.name}" for f in dataclasses.fields(dclass)]
+    STRUCT_ARG_NAME = "struct_args"
+    _arg_line = f"{STRUCT_ARG_NAME} = ({', '.join(_arg_parts)})"
+    STRUCT_DELEGATE_NAME = "_struct"
+    _delegate_line = f"packed:bytes = self.__class__.{STRUCT_DELEGATE_NAME}.pack({STRUCT_ARG_NAME})"
+    _result_line = "return packed"
+    BODY = [_arg_line, _delegate_line, _result_line]
+
+    return NAME, _create_func(NAME, ARGS, BODY, RTYPE, locals=locals, globals=globals)
+
+
+# DO NOT INJECT COMMON FUNCITONS
+#   I'd prefer to have the callstack preserved for debugging ~ This is complicated enough without hiding information.
+
+class hybridmethod:
+    def __init__(self, inst=None, klass=None, doc=None):
+        self._instance = inst
+        self._klass = klass
+        self._doc = doc
+
+    def __doc__(self):
+        return self._doc
+
+    def instance(self, func):
+        self._instance = func
+
+    def klass(self, func):
+        self._klass = func
+
+    def __get__(self, instance, owner):
+        if instance is not None:
+            return partial(self._instance, instance)
+        else:
+            return partial(self._klass, owner)
+
+    # def __call__(self, *args, **kwargs):
+    #     print("X")
+    #     pass
+
+
+class _DatastructPackable:
     @classmethod
     def apply(cls, klass):
-        klass.pack = cls.pack
-        klass.unpack = cls.unpack
-        klass.pack_into = cls.pack_into
-        klass.unpack_from = cls.unpack_from
+        _inject_func(klass, *_datastruct_tuplify(klass))
+        klass.pack = hybridmethod(cls.pack, cls.pack_cls)
+        klass.pack_into = hybridmethod(cls.pack_into, cls.pack_into_cls)
+        klass.unpack = classmethod(cls.unpack)
+        klass.unpack_from = classmethod(cls.unpack_from)
 
-        klass.__typedef_annotation__ = cls.__typedef_annotation__
-        klass.__typedef_alignment__ = cls.__typedef_alignment__
-        klass.__typedef_native_size__ = cls.__typedef_native_size__
+        klass.__typedef_annotation__ = property(cls.__typedef_annotation__)
+        klass.__typedef_alignment__ = property(cls.__typedef_alignment__)
+        klass.__typedef_native_size__ = property(cls.__typedef_native_size__)
 
-    @property
+    @staticmethod
+    def pack(self, arg: NoneType = None):
+        if arg is not None:
+            raise NotImplementedError
+        struct_args = getattr(self, _datastruct_tuplify_name)()
+        return self.__class__._struct.pack(struct_args)
+
+    @staticmethod
+    def pack_cls(cls, arg: T):
+        struct_args = getattr(arg, _datastruct_tuplify_name)()
+        return cls._struct.pack(struct_args)
+
+    @staticmethod
     def __typedef_annotation__(self):
         return self.__class__
 
-    @property
+    @staticmethod
     def __typedef_alignment__(self):
         return self._struct.__typedef_alignment__
 
-    @property
+    @staticmethod
     def __typedef_native_size__(self):
         return self._struct.__typedef_native_size__
 
-    def pack(cls, arg: Optional[T] = None) -> bytes:
-        if isinstance(cls, type):  # class call
-            struct_args = astuple(arg)
-            return arg._struct.pack(struct_args)
-        else:
-            if arg is not None:
-                raise NotImplementedError
-            struct_args = astuple(cls)  # cls is self
-            return cls._struct.pack(struct_args)
-
+    @staticmethod
     def unpack(cls, buffer: bytes) -> T:
         args = cls._struct.unpack(buffer)
-        return cls.__class__(*args)
+        return cls(*args)
 
-    @classmethod
-    def pack_into(
-            cls,
-            writable: PackWritable,
-            arg: Optional[T] = None,
-            *,
-            offset: Optional[int] = None,
-            origin: int = 0,
-    ) -> int:
-        if isinstance(cls, type):  # class call
-            struct_args = astuple(arg)
-            return arg._struct.pack_into(
-                writable, struct_args, offset=offset, origin=origin
-            )
-        else:
-            if arg is not None:
-                raise NotImplementedError
-            struct_args = astuple(cls)  # cls is self
-            return cls._struct.pack_into(
-                writable, struct_args, offset=offset, origin=origin
-            )
+    @staticmethod
+    def pack_into_cls(cls, writable: PackWritable, arg: T, *, offset: Optional[int] = None, origin: int = 0):
+        struct_args = getattr(arg, _datastruct_tuplify_name)()
+        return cls._struct.pack_into(writable, struct_args, offset=offset, origin=origin)
 
-    @classmethod
+    @staticmethod
+    def pack_into(self, writable: PackWritable, arg: NoneType = None, *, offset: Optional[int] = None, origin: int = 0):
+        if arg is not None:
+            raise NotImplementedError
+        struct_args = getattr(arg, _datastruct_tuplify_name)()
+        return self._struct.pack_into(writable, struct_args, offset=offset, origin=origin)
+
+    @staticmethod
     def unpack_from(
             cls, readable: PackReadable, *, offset: Optional[int] = None, origin: int = 0
     ) -> Tuple[int, T]:
-        return cls._struct.unpack_from(readable, offset=offset, origin=origin)
+        read, args = cls._struct.unpack_from(readable, offset=offset, origin=origin)
+        return read, cls(*args)
 
-
-class _EnumstructPackableMixin(Packable):
-    if TYPE_CHECKING:
-        _struct: Packable = None
-
+class _EnumstructPackable:
     @classmethod
     def apply(cls, klass):
-        klass.pack = cls.pack
-        klass.unpack = cls.unpack
-        klass.pack_into = cls.pack_into
-        klass.unpack_from = cls.unpack_from
+        klass.pack = hybridmethod(cls.pack, cls.pack_cls)
+        klass.pack_into = hybridmethod(cls.pack_into, cls.pack_into_cls)
+        klass.unpack = classmethod(cls.unpack)
+        klass.unpack_from = classmethod(cls.unpack_from)
 
-        klass.__typedef_annotation__ = cls.__typedef_annotation__
-        klass.__typedef_alignment__ = cls.__typedef_alignment__
-        klass.__typedef_native_size__ = cls.__typedef_native_size__
+        klass.__typedef_annotation__ = property(cls.__typedef_annotation__)
+        klass.__typedef_alignment__ = property(cls.__typedef_alignment__)
+        klass.__typedef_native_size__ = property(cls.__typedef_native_size__)
 
-    @property
+    @staticmethod
+    def pack(self, arg: NoneType = None):
+        if arg is not None:
+            raise NotImplementedError
+        enum_arg = self.value
+        return self.__class__._struct.pack(enum_arg)
+
+    @staticmethod
+    def pack_cls(cls, arg: T):
+        enum_arg = arg.value
+        return cls._struct.pack(enum_arg)
+
+    @staticmethod
     def __typedef_annotation__(self):
         return self.__class__
 
-    @property
+    @staticmethod
     def __typedef_alignment__(self):
         return self._struct.__typedef_alignment__
 
-    @property
+    @staticmethod
     def __typedef_native_size__(self):
         return self._struct.__typedef_native_size__
 
-    def pack(cls, arg: Optional[T] = None) -> bytes:
-        if isinstance(cls, type):  # class call
-            return arg._struct.pack(arg)
-        else:
-            if arg is not None:
-                raise NotImplementedError
-            return cls._struct.pack(cls)
-
+    @staticmethod
     def unpack(cls, buffer: bytes) -> T:
-        args = cls._struct.unpack(buffer)
-        return cls.__class__(args)
+        arg = cls._struct.unpack(buffer)
+        return cls(arg)
 
-    @classmethod
-    def pack_into(
-            cls,
-            writable: PackWritable,
-            arg: Optional[T] = None,
-            *,
-            offset: Optional[int] = None,
-            origin: int = 0,
-    ) -> int:
-        if isinstance(cls, type):  # class call
-            return arg._struct.pack_into(
-                writable, arg, offset=offset, origin=origin
-            )
-        else:
-            if arg is not None:
-                raise NotImplementedError
-            return cls._struct.pack_into(
-                writable, cls, offset=offset, origin=origin
-            )
+    @staticmethod
+    def pack_into_cls(cls, writable: PackWritable, arg: T, *, offset: Optional[int] = None, origin: int = 0):
+        enum_arg = arg.value
+        return cls._struct.pack_into(writable, enum_arg, offset=offset, origin=origin)
 
-    @classmethod
+    @staticmethod
+    def pack_into(self, writable: PackWritable, arg: NoneType = None, *, offset: Optional[int] = None, origin: int = 0):
+        if arg is not None:
+            raise NotImplementedError
+        enum_arg = self.value
+        return self._struct.pack_into(writable, enum_arg, offset=offset, origin=origin)
+
+    @staticmethod
     def unpack_from(
             cls, readable: PackReadable, *, offset: Optional[int] = None, origin: int = 0
     ) -> Tuple[int, T]:
-        return cls._struct.unpack_from(readable, offset=offset, origin=origin)
+        read, arg = cls._struct.unpack_from(readable, offset=offset, origin=origin)
+        return read, cls(arg)
 
 
 def datastruct(cls=None, /, alignment: int = None, **dataclass_kwargs):
@@ -257,7 +330,7 @@ def datastruct(cls=None, /, alignment: int = None, **dataclass_kwargs):
         klass._struct = construct_struct(
             [t for t in klass._dstruct_annotations.values()]
         )
-        _DataclassPackableMixin.apply(klass)
+        _DatastructPackable.apply(klass)
         # print(klass.__typedef_alignment__)
         return klass
 
@@ -267,13 +340,13 @@ def datastruct(cls=None, /, alignment: int = None, **dataclass_kwargs):
         return wrap(cls)  # Called with @datastruct
 
 
-def enumstruct(cls=None, /, backing_type: Packable=None):
+def enumstruct(cls=None, /, backing_type: Packable = None):
     def wrap(klass):
         if backing_type is None:
             raise NotImplementedError
 
         klass._struct = backing_type
-        _EnumstructPackableMixin.apply(klass)
+        _EnumstructPackable.apply(klass)
         return klass
 
     if cls is None:

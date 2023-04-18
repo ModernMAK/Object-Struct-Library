@@ -25,18 +25,18 @@ class AttrProtocolMeta(_ProtocolMeta):
         # We need this method for situations where attributes are
         # assigned in __init__.
         if (
-            not getattr(cls, "_is_protocol", False) or _is_callable_members_only(cls)
+                not getattr(cls, "_is_protocol", False) or _is_callable_members_only(cls)
         ) and issubclass(instance.__class__, cls):
             return True
         if cls._is_protocol:
             if all(
-                hasattr(instance, attr) and
-                # All *methods* can be blocked by setting them to None.
-                (
-                    not callable(getattr(cls, attr, None))
-                    or getattr(instance, attr) is not None
-                )
-                for attr in _get_protocol_attrs(cls)
+                    hasattr(instance, attr) and
+                    # All *methods* can be blocked by setting them to None.
+                    (
+                            not callable(getattr(cls, attr, None))
+                            or getattr(instance, attr) is not None
+                    )
+                    for attr in _get_protocol_attrs(cls)
             ):
                 return True
             else:
@@ -114,8 +114,8 @@ class TypeDefAnnotated(Protocol, metaclass=AttrProtocolMeta):
 
 def native_size_of(typedef: TypeDefSizable):
     # TODO ~ FIX HACK
-    native_size =  typedef.__typedef_native_size__
-    if isinstance(native_size,property):
+    native_size = typedef.__typedef_native_size__
+    if isinstance(native_size, property):
         native_size = native_size.fget(typedef)
     return native_size
 

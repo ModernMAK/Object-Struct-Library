@@ -1,5 +1,4 @@
 import itertools
-from dataclasses import astuple
 from enum import IntEnum
 
 import pytest
@@ -8,7 +7,7 @@ from structlib.byteorder import ByteOrder
 from structlib.datastruct import datastruct, enumstruct
 from structlib.typedef import size_of
 from structlib.typedefs.integer import IntegerDefinition
-from structlib.typedefs.strings import StringBuffer, CStringBuffer
+from structlib.typedefs.strings import CStringBuffer
 from structlib.typedefs.structure import Struct
 
 _SGA_BOM: ByteOrder = "little"
@@ -55,7 +54,7 @@ class DriveDef:
 @pytest.mark.parametrize("length_on_disk", [0, _UInt32Max])
 @pytest.mark.parametrize("length_in_archive", [0, _UInt32Max])
 @pytest.mark.parametrize("data_pos", [0, _UInt32Max])
-@pytest.mark.parametrize("storage_type", [0, 16, 32])
+@pytest.mark.parametrize("storage_type", [StorageType.None_, StorageType.Buffer, StorageType.Stream])
 @pytest.mark.parametrize("name_pos", [0, _UInt32Max])
 class TestFileDef:
     @staticmethod
@@ -69,6 +68,14 @@ class TestFileDef:
         args = (name_pos, storage_type, data_pos, length_in_archive, length_on_disk)
         inst = FileDef(*args)
         packed = inst.pack()
+        unpacked = inst.unpack(packed)
+        assert unpacked == inst
+
+    @staticmethod
+    def test_pack_class(name_pos: int, storage_type: int, data_pos: int, length_in_archive: int, length_on_disk):
+        args = (name_pos, storage_type, data_pos, length_in_archive, length_on_disk)
+        inst = FileDef(*args)
+        packed = FileDef.pack(inst)
         unpacked = inst.unpack(packed)
         assert unpacked == inst
 
