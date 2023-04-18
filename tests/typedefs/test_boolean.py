@@ -6,7 +6,12 @@ from rng import generate_bools
 from structlib.typedef import align_of
 from structlib.typedefs.boolean import BooleanDefinition
 from tests.typedefs.common_tests import (
-    AlignmentTests, IOPackableTests, PackableTests, TypedefInequalityTests, TypedefEqualityTests, )
+    AlignmentTests,
+    IOPackableTests,
+    PackableTests,
+    TypedefInequalityTests,
+    TypedefEqualityTests,
+)
 
 _ALIGNMENTS = [1, 2, 4, 8]
 _SAMPLE_COUNT = 16
@@ -15,10 +20,7 @@ _ORIGINS = [0, 1, 2]
 _OFFSETS = [0, 1, 2]
 _TEST_TYPEDEF_ARGS = _ALIGNMENTS
 _TEST_TYPEDEFS_EQUAL = {
-    (
-        BooleanDefinition(alignment=alignment),
-        BooleanDefinition(alignment=alignment)
-    )
+    (BooleanDefinition(alignment=alignment), BooleanDefinition(alignment=alignment))
     for alignment in _TEST_TYPEDEF_ARGS
 }
 
@@ -26,7 +28,7 @@ _TEST_TYPEDEFS = list(pair[0] for pair in _TEST_TYPEDEFS_EQUAL)
 _TEST_TYPEDEFS_UNEQUAL = list(itertools.permutations(_TEST_TYPEDEFS, 2))
 
 
-def get_packer(t, use_io:bool):
+def get_packer(t, use_io: bool):
     alignment = align_of(t)
 
     def pack(v: bool):
@@ -36,18 +38,12 @@ def get_packer(t, use_io:bool):
         else:
             return bool_buf + b"\0" * (alignment - 1)
 
-
     return pack
 
 
-_PACKERS = {t: get_packer(t,False) for t in _TEST_TYPEDEFS}
-_PACKERSIO = {t: get_packer(t,True) for t in _TEST_TYPEDEFS}
-_SAMPLES = {
-    t: list(
-        generate_bools(_SAMPLE_COUNT, _SEED)
-    )
-    for t in _TEST_TYPEDEFS
-}
+_PACKERS = {t: get_packer(t, False) for t in _TEST_TYPEDEFS}
+_PACKERSIO = {t: get_packer(t, True) for t in _TEST_TYPEDEFS}
+_SAMPLES = {t: list(generate_bools(_SAMPLE_COUNT, _SEED)) for t in _TEST_TYPEDEFS}
 
 _TEST_TYPEDEF_PACKABLE = []
 _TEST_TYPEDEF_PACKABLEIO = []

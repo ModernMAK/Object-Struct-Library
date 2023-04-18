@@ -19,8 +19,14 @@ def _get_globals(klass):
 
 
 #
-def _create_func(name, arguments: List[str], body: List[str], rtype: Optional[str] = "", globals: Optional[Dict] = None,
-                 locals=None):
+def _create_func(
+    name,
+    arguments: List[str],
+    body: List[str],
+    rtype: Optional[str] = "",
+    globals: Optional[Dict] = None,
+    locals=None,
+):
     locals = locals or {}
     return_def = f" -> {rtype}" if rtype != "" else ""
     func_def = f"def {name} ({', '.join(arguments)}){return_def}:"
@@ -29,7 +35,9 @@ def _create_func(name, arguments: List[str], body: List[str], rtype: Optional[st
     injectable_def = full_def.replace("\t", "\t\t")  # Need to be one level deeper
     INJECTOR_NAME = "inject"
     INJECTOR_ARGS = ",".join(locals.keys())
-    injector_def = f"def {INJECTOR_NAME}({INJECTOR_ARGS}):\n\t{injectable_def}\n\treturn {name}"
+    injector_def = (
+        f"def {INJECTOR_NAME}({INJECTOR_ARGS}):\n\t{injectable_def}\n\treturn {name}"
+    )
     resultspace = {}
 
     # create the injector
@@ -86,6 +94,7 @@ def _datastruct_tuplify(dclass, globals: Optional[Dict] = None) -> Tuple[str, Ca
 # DO NOT INJECT COMMON FUNCTIONS
 #   I'd prefer to have the callstack preserved for debugging ~ This is complicated enough without hiding information.
 
+
 class hybridmethod:
     def __init__(self, inst=None, klass=None, doc=None):
         self._instance = inst
@@ -135,7 +144,7 @@ class classproperty:
         return self._fget(owner)
 
     def __set__(self, instance, value):
-        return self._fset(instance,value)
+        return self._fset(instance, value)
 
     def __delete__(self, instance):
         return self._fdel(instance)
@@ -189,29 +198,47 @@ class _DatastructPackable:
         return cls(*args)
 
     @staticmethod
-    def pack_into_cls(cls, writable: PackWritable, arg: T, *, offset: Optional[int] = None, origin: int = 0):
+    def pack_into_cls(
+        cls,
+        writable: PackWritable,
+        arg: T,
+        *,
+        offset: Optional[int] = None,
+        origin: int = 0,
+    ):
         struct_args = getattr(arg, _datastruct_tuplify_name)()
-        return cls._struct.pack_into(writable, struct_args, offset=offset, origin=origin)
+        return cls._struct.pack_into(
+            writable, struct_args, offset=offset, origin=origin
+        )
 
     @staticmethod
-    def pack_into(self, writable: PackWritable, arg: NoneType = None, *, offset: Optional[int] = None, origin: int = 0):
+    def pack_into(
+        self,
+        writable: PackWritable,
+        arg: NoneType = None,
+        *,
+        offset: Optional[int] = None,
+        origin: int = 0,
+    ):
         if arg is not None:
             raise NotImplementedError
         struct_args = getattr(self, _datastruct_tuplify_name)()
-        return self._struct.pack_into(writable, struct_args, offset=offset, origin=origin)
+        return self._struct.pack_into(
+            writable, struct_args, offset=offset, origin=origin
+        )
 
     @staticmethod
     def unpack_from(
-            cls, readable: PackReadable, *, offset: Optional[int] = None, origin: int = 0
+        cls, readable: PackReadable, *, offset: Optional[int] = None, origin: int = 0
     ) -> Tuple[int, T]:
         read, args = cls._struct.unpack_from(readable, offset=offset, origin=origin)
         return read, cls(*args)
 
     @staticmethod
     def __typedef_align_as__(cls, alignment):
-        raise NotImplementedError("DataStruct does not support post-def alignment assignment!")
-
-
+        raise NotImplementedError(
+            "DataStruct does not support post-def alignment assignment!"
+        )
 
 
 class _EnumstructPackable:
@@ -257,12 +284,26 @@ class _EnumstructPackable:
         return cls(arg)
 
     @staticmethod
-    def pack_into_cls(cls, writable: PackWritable, arg: T, *, offset: Optional[int] = None, origin: int = 0):
+    def pack_into_cls(
+        cls,
+        writable: PackWritable,
+        arg: T,
+        *,
+        offset: Optional[int] = None,
+        origin: int = 0,
+    ):
         enum_arg = arg.value
         return cls._struct.pack_into(writable, enum_arg, offset=offset, origin=origin)
 
     @staticmethod
-    def pack_into(self, writable: PackWritable, arg: NoneType = None, *, offset: Optional[int] = None, origin: int = 0):
+    def pack_into(
+        self,
+        writable: PackWritable,
+        arg: NoneType = None,
+        *,
+        offset: Optional[int] = None,
+        origin: int = 0,
+    ):
         if arg is not None:
             raise NotImplementedError
         enum_arg = self.value
@@ -270,14 +311,16 @@ class _EnumstructPackable:
 
     @staticmethod
     def unpack_from(
-            cls, readable: PackReadable, *, offset: Optional[int] = None, origin: int = 0
+        cls, readable: PackReadable, *, offset: Optional[int] = None, origin: int = 0
     ) -> Tuple[int, T]:
         read, arg = cls._struct.unpack_from(readable, offset=offset, origin=origin)
         return read, cls(arg)
 
     @staticmethod
     def __typedef_align_as__(cls, alignment):
-        raise NotImplementedError("EnumStruct does not support post-def alignment assignment!")
+        raise NotImplementedError(
+            "EnumStruct does not support post-def alignment assignment!"
+        )
 
 
 def datastruct(cls=None, /, alignment: int = None, **dataclass_kwargs):

@@ -102,7 +102,12 @@ class IntegerDefinition(
             return False
 
     def __hash__(self):
-        hashable = (self._signed, self.__typedef_byteorder__, self.__typedef_alignment__, self.__typedef_native_size__)
+        hashable = (
+            self._signed,
+            self.__typedef_byteorder__,
+            self.__typedef_alignment__,
+            self.__typedef_native_size__,
+        )
         return hash(hashable)
 
     def __str__(self):

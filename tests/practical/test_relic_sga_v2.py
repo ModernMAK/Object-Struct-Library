@@ -7,7 +7,14 @@ import pytest
 
 from structlib.byteorder import ByteOrder
 from structlib.datastruct import datastruct, enumstruct
-from structlib.typedef import size_of, calculate_padding, align_as, align_of, native_size_of, annotation_of
+from structlib.typedef import (
+    size_of,
+    calculate_padding,
+    align_as,
+    align_of,
+    native_size_of,
+    annotation_of,
+)
 from structlib.typedefs.integer import IntegerDefinition
 from structlib.typedefs.strings import CStringBuffer
 from structlib.typedefs.structure import Struct
@@ -17,8 +24,8 @@ UInt32 = IntegerDefinition(byte_size=4, signed=False, byteorder=_SGA_BOM)
 UInt16 = IntegerDefinition(byte_size=2, signed=False, byteorder=_SGA_BOM)
 TocRange = Struct(UInt16, UInt16, alignment=1)
 DriveString = CStringBuffer(64, encoding="ascii", alignment=1)
-_UInt32Max = (2 ** 32) - 1
-_UInt16Max = (2 ** 16) - 1
+_UInt32Max = (2**32) - 1
+_UInt16Max = (2**16) - 1
 
 
 @enumstruct(backing_type=UInt32)
@@ -64,10 +71,12 @@ class DataStructTests:
         raise NotImplementedError
 
     @classmethod
-    def _emulate_nonaligned(cls, _buffer: bytes, _origin: int, _offset: int, _alignment: int):
-        aligned_offset = (_offset + calculate_padding(_alignment, _offset))
+    def _emulate_nonaligned(
+        cls, _buffer: bytes, _origin: int, _offset: int, _alignment: int
+    ):
+        aligned_offset = _offset + calculate_padding(_alignment, _offset)
         size = len(_buffer)
-        aligned_size = (size + calculate_padding(_alignment, size))
+        aligned_size = size + calculate_padding(_alignment, size)
         full_size = _origin + aligned_offset + aligned_size
         emu = bytearray(b"\0" * full_size)
         start = _origin + aligned_offset
@@ -102,7 +111,9 @@ class DataStructTests:
 
     def test_pack_into_stream(self, typedef, arg, origin: int, offset: int):
         raw = self._emulate_pack(arg)
-        expected_write, expected_buffer = self._emulate_nonaligned(raw, origin, offset, align_of(typedef))
+        expected_write, expected_buffer = self._emulate_nonaligned(
+            raw, origin, offset, align_of(typedef)
+        )
         inst = typedef(*arg)
         with BytesIO() as stream:
             stream.write(b"\0" * (origin + offset))
@@ -114,7 +125,9 @@ class DataStructTests:
 
     def test_pack_into_buffer(self, typedef, arg, origin: int, offset: int):
         raw = self._emulate_pack(arg)
-        expected_write, expected_buffer = self._emulate_nonaligned(raw, origin, offset, align_of(typedef))
+        expected_write, expected_buffer = self._emulate_nonaligned(
+            raw, origin, offset, align_of(typedef)
+        )
         inst = typedef(*arg)
         wrote_buffer = bytearray(len(expected_buffer))
         wrote = inst.pack_into(wrote_buffer, origin=origin, offset=offset)
@@ -123,7 +136,9 @@ class DataStructTests:
 
     def test_unpack_from_stream(self, typedef, arg, origin: int, offset: int):
         raw = self._emulate_pack(arg)
-        expected_read, read_buffer = self._emulate_nonaligned(raw, origin, offset, align_of(typedef))
+        expected_read, read_buffer = self._emulate_nonaligned(
+            raw, origin, offset, align_of(typedef)
+        )
         expected_inst = typedef(*arg)
         with BytesIO(read_buffer) as stream:
             stream.seek(origin + offset)
@@ -133,7 +148,9 @@ class DataStructTests:
 
     def test_unpack_from_buffer(self, typedef, arg, origin: int, offset: int):
         raw = self._emulate_pack(arg)
-        expected_read, read_buffer = self._emulate_nonaligned(raw, origin, offset, align_of(typedef))
+        expected_read, read_buffer = self._emulate_nonaligned(
+            raw, origin, offset, align_of(typedef)
+        )
         expected_inst = typedef(*arg)
         read, read_inst = typedef.unpack_from(read_buffer, origin=origin, offset=offset)
         assert read == expected_read
@@ -170,7 +187,11 @@ _STORAGE_TYPE = [StorageType.None_, StorageType.Buffer, StorageType.Stream]
 _DATA_POS = [0, _UInt32Max]
 _LEN_IN_ARCHIVE = [0, _UInt32Max]
 _LEN_ON_DISK = [0, _UInt32Max]
-FILEDEF_ARGS = list(itertools.product(_NAME_POS, _STORAGE_TYPE, _DATA_POS, _LEN_IN_ARCHIVE, _LEN_ON_DISK))
+FILEDEF_ARGS = list(
+    itertools.product(
+        _NAME_POS, _STORAGE_TYPE, _DATA_POS, _LEN_IN_ARCHIVE, _LEN_ON_DISK
+    )
+)
 FILEDEF_ARG_IDS = [str(FileDef(*arg)) for arg in FILEDEF_ARGS]
 _OFFSET_IDS = _pretty_ids("offset", _OFFSETS)
 _ORIGIN_IDS = _pretty_ids("origin", _ORIGINS)
@@ -220,7 +241,9 @@ _FOLDER_RANGE = list(itertools.permutations([0, _UInt16Max], 2))
 _ROOT_FOLDER = [0, _UInt16Max]
 _ALIAS = ["Drive Alias", "Test Alias"]
 _NAME = ["Drive Name", "Test Name"]
-_DRIVEDEF_ARGS = list(itertools.product(_ALIAS, _NAME, _ROOT_FOLDER, _FOLDER_RANGE, _FILE_RANGE))
+_DRIVEDEF_ARGS = list(
+    itertools.product(_ALIAS, _NAME, _ROOT_FOLDER, _FOLDER_RANGE, _FILE_RANGE)
+)
 _DRIVEDEF_ARG_IDS = [str(DriveDef(*arg)) for arg in _DRIVEDEF_ARGS]
 
 
@@ -231,9 +254,10 @@ class TestDriveDef(DataStructTests):
     def typedef(self):
         return DriveDef
 
-    @pytest.fixture(params=_DRIVEDEF_ARGS,ids=_DRIVEDEF_ARG_IDS)
+    @pytest.fixture(params=_DRIVEDEF_ARGS, ids=_DRIVEDEF_ARG_IDS)
     def arg(self, request):
         return request.param
+
     @pytest.fixture
     def typedef_native_size(self):
         return 138
@@ -244,13 +268,20 @@ class TestDriveDef(DataStructTests):
 
     @classmethod
     def _emulate_pack(cls, _arg):
-        s_arg = (_arg[0].encode("ascii"), _arg[1].encode("ascii"), _arg[2], _arg[3][0], _arg[3][1], _arg[4][0], _arg[4][1])
+        s_arg = (
+            _arg[0].encode("ascii"),
+            _arg[1].encode("ascii"),
+            _arg[2],
+            _arg[3][0],
+            _arg[3][1],
+            _arg[4][0],
+            _arg[4][1],
+        )
         return cls._s.pack(*s_arg)
 
     @pytest.fixture
     def typedef_alignment(self):
         return 1
-
 
     @pytest.fixture(params=_OFFSETS, ids=_OFFSET_IDS)
     def offset(self, request):
@@ -259,23 +290,3 @@ class TestDriveDef(DataStructTests):
     @pytest.fixture(params=_ORIGINS, ids=_ORIGIN_IDS)
     def origin(self, request):
         return request.param
-
-# @pytest.mark.parametrize("file_range", )
-# @pytest.mark.parametrize("folder_range", )
-# @pytest.mark.parametrize("root_folder", )
-# @pytest.mark.parametrize("alias", )
-# @pytest.mark.parametrize("name", )
-# class TestDriveDef:
-#     @staticmethod
-#     def test_size(alias, name, root_folder, folder_range, file_range):
-#         args = (alias, name, root_folder, folder_range, file_range)
-#         inst = DriveDef(*args)
-#         assert size_of(inst) == 138
-#
-#     @staticmethod
-#     def test_pack_symmetry(alias, name, root_folder, folder_range, file_range):
-#         args = (alias, name, root_folder, folder_range, file_range)
-#         inst = DriveDef(*args)
-#         packed = inst.pack()
-#         unpacked = inst.unpack(packed)
-#         assert unpacked == inst

@@ -40,7 +40,6 @@ class BooleanDefinition(
     def __hash__(self):
         return hash(self.__typedef_alignment__)
 
-
     def _to_bytes(self, *args: bool) -> bytes:
         alignment = align_of(self)
         padding = alignment - self.NATIVE_SIZE
