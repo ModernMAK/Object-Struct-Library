@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from types import NoneType
 from typing import (
     Tuple,
     BinaryIO,
@@ -20,44 +21,47 @@ from structlib.typeshed import (
     WritableStream,
 )
 
+T = TypeVar("T")
+
+PackWritable = Union[WritableBuffer, WritableStream]
+PackReadable = Union[ReadableBuffer, ReadableStream]
+
 
 @runtime_checkable
 class ConstPackable(Protocol):
     """
     A special packable for 'const' types; types that should know how to pack/unpack themselves without arguments.
 
-    Padding / Constant Bytes / Data which should be ignored
+    Padding / Constant Bytes / Reserved Fields
+
+    Const Packable does NOT accept / return a result.
     """
 
-    @abstractmethod
-    def const_pack(self) -> bytes:
-        raise PrettyNotImplementedError(self, self.const_pack)
+    __typedef_const_packable__: NoneType = None
 
     @abstractmethod
-    def const_unpack(self, buffer: bytes) -> None:
-        raise PrettyNotImplementedError(self, self.const_unpack)
+    def pack(self) -> bytes:
+        raise PrettyNotImplementedError(self, self.pack)
 
     @abstractmethod
-    def const_pack_buffer(
-        self, buffer: WritableBuffer, *, offset: int, origin: int
+    def unpack(self, buffer: bytes) -> None:
+        raise PrettyNotImplementedError(self, self.unpack)
+
+    @abstractmethod
+    def pack_into(
+            self,
+            writable: PackWritable,
+            *,
+            offset: Optional[int] = None,
+            origin: int = 0
     ) -> int:
-        raise PrettyNotImplementedError(self, self.const_pack_buffer)
+        raise PrettyNotImplementedError(self, self.pack_into)
 
     @abstractmethod
-    def const_unpack_buffer(
-        self, buffer: ReadableBuffer, *, offset: int, origin: int
+    def unpack_from(
+            self, readable: PackReadable, *, offset: Optional[int] = None, origin: int = 0
     ) -> Tuple[int, None]:
-        raise PrettyNotImplementedError(self, self.const_unpack_buffer)
-
-    @abstractmethod
-    def const_pack_stream(self, stream: WritableStream, *, origin: int) -> int:
-        raise PrettyNotImplementedError(self, self.const_pack_stream)
-
-    @abstractmethod
-    def const_unpack_stream(
-        self, stream: ReadableStream, *, origin: int
-    ) -> Tuple[int, None]:
-        raise PrettyNotImplementedError(self, self.const_unpack_stream)
+        raise PrettyNotImplementedError(self, self.unpack_from)
 
 
 class ConstPackableABC(ConstPackable, TypeDefSizable, TypeDefAlignable, ABC):
@@ -65,35 +69,67 @@ class ConstPackableABC(ConstPackable, TypeDefSizable, TypeDefAlignable, ABC):
     A ConstPackable which uses pack/unpack and a fixed size typedef to perform buffer/stream operations.
     """
 
-    def const_pack_buffer(
-        self, buffer: WritableBuffer, offset: int, origin: int
+    def pack_into(
+            self,
+            writable: PackWritable,
+            # arg: T,
+            *,
+            offset: Optional[int] = None,
+            origin: int = 0
     ) -> int:
-        packed = self.const_pack()
+        if isinstance(writable, WritableBuffer):
+            return self._pack_buffer(writable, offset=offset or 0, origin=origin)
+        else:
+            if offset is not None:
+                raise NotImplementedError(
+                    "TODO: How do we handle offset being non-None for streams?"
+                )  # TODO
+            return self._pack_stream(writable, origin=origin)
+
+    def unpack_from(
+            self, readable: PackReadable, *, offset: Optional[int] = None, origin: int = 0
+    ) -> Tuple[int, T]:
+        if isinstance(readable, ReadableBuffer):
+            return self._unpack_buffer(readable, offset=offset or 0, origin=origin)
+        else:
+            if offset is not None:
+                raise NotImplementedError(
+                    "TODO: How do we handle offset being non-None for streams?"
+                )  # TODO
+            return self._unpack_stream(readable, origin=origin)
+
+    def _pack_buffer(
+            self, buffer: WritableBuffer, *, offset: int = 0, origin: int = 0
+    ) -> int:
+        packed = self.pack()
         alignment = align_of(self)
         return bufferio.write(buffer, packed, alignment, offset, origin)
 
-    def const_unpack_buffer(
-        self, buffer: ReadableBuffer, *, offset: int, origin: int
-    ) -> Tuple[int, Any]:
+    def _unpack_buffer(
+            self, buffer: ReadableBuffer, *, offset: int = 0, origin: int = 0
+    ) -> Tuple[int, None]:
         size = size_of(self)
         alignment = align_of(self)
         read, packed = bufferio.read(buffer, size, alignment, offset, origin)
-        unpacked = self.const_unpack(packed)
+        unpacked = self.unpack(packed)
         return read, unpacked
 
-    def const_pack_stream(self, stream: BinaryIO, *args: Any, origin: int) -> int:
-        packed = self.const_pack()
+    def _pack_stream(self, stream: WritableStream, *, origin: int = 0) -> int:
+        packed = self.pack()
         alignment = align_of(self)
         return streamio.write(stream, packed, alignment, origin)
 
-    def const_unpack_stream(self, stream: BinaryIO, *, origin: int) -> Tuple[int, Any]:
+    def _unpack_stream(
+            self, stream: ReadableStream, *, origin: int = 0
+    ) -> Tuple[int, T]:
         size = size_of(self)
         alignment = align_of(self)
         read, packed = streamio.read(stream, size, alignment, origin)
-        unpacked = self.const_unpack(packed)
+        unpacked = self.unpack(packed)
         return read, unpacked
 
 
+# TODO deprecate
 @runtime_checkable
 class IterPackable(Protocol):
     @abstractmethod
@@ -106,13 +142,13 @@ class IterPackable(Protocol):
 
     @abstractmethod
     def iter_pack_buffer(
-        self, buffer: WritableBuffer, *args: Any, offset: int, origin: int
+            self, buffer: WritableBuffer, *args: Any, offset: int, origin: int
     ) -> int:
         raise PrettyNotImplementedError(self, self.iter_pack_buffer)
 
     @abstractmethod
     def iter_unpack_buffer(
-        self, buffer: ReadableBuffer, iter_count: int, *, offset: int, origin: int
+            self, buffer: ReadableBuffer, iter_count: int, *, offset: int, origin: int
     ) -> Tuple[int, Any]:
         raise PrettyNotImplementedError(self, self.iter_unpack_buffer)
 
@@ -122,25 +158,26 @@ class IterPackable(Protocol):
 
     @abstractmethod
     def iter_unpack_stream(
-        self, stream: ReadableStream, iter_count: int, *, origin: int
+            self, stream: ReadableStream, iter_count: int, *, origin: int
     ) -> Tuple[int, Any]:
         raise PrettyNotImplementedError(self, self.iter_unpack_stream)
 
 
+# TODO deprecate
 class IterPackableABC(IterPackable, TypeDefSizable, TypeDefAlignable, ABC):
     """
     An IterPackable which uses iter_pack/iter_unpack to perform buffer/stream operations.
     """
 
     def iter_pack_buffer(
-        self, buffer: WritableBuffer, *args: Any, offset: int, origin: int
+            self, buffer: WritableBuffer, *args: Any, offset: int, origin: int
     ) -> int:
         packed = self.iter_pack(*args)
         alignment = align_of(self)
         return bufferio.write(buffer, packed, alignment, offset, origin)
 
     def iter_unpack_buffer(
-        self, buffer: ReadableBuffer, iter_count: int, *, offset: int, origin: int
+            self, buffer: ReadableBuffer, iter_count: int, *, offset: int, origin: int
     ) -> Tuple[int, Any]:
         size = size_of(self) * iter_count
         alignment = align_of(self)
@@ -154,19 +191,13 @@ class IterPackableABC(IterPackable, TypeDefSizable, TypeDefAlignable, ABC):
         return streamio.write(stream, packed, alignment, origin)
 
     def iter_unpack_stream(
-        self, stream: BinaryIO, iter_count: int, *, origin: int
+            self, stream: BinaryIO, iter_count: int, *, origin: int
     ) -> Tuple[int, Any]:
         size = size_of(self) * iter_count
         alignment = align_of(self)
         read, packed = streamio.read(stream, size, alignment, origin)
         unpacked = self.iter_unpack(packed, iter_count)
         return read, unpacked
-
-
-T = TypeVar("T")
-
-PackWritable = Union[WritableBuffer, WritableStream]
-PackReadable = Union[ReadableBuffer, ReadableStream]
 
 
 @runtime_checkable
@@ -181,20 +212,20 @@ class Packable(Protocol[T]):
 
     @abstractmethod
     def pack_into(
-        self,
-        writable: PackWritable,
-        arg: T,
-        *,
-        offset: Optional[int] = None,
-        origin: int = 0
+            self,
+            writable: PackWritable,
+            arg: T,
+            *,
+            offset: Optional[int] = None,
+            origin: int = 0
     ) -> int:
         raise PrettyNotImplementedError(self, self.pack_into)
 
     @abstractmethod
     def unpack_from(
-        self, readable: PackReadable, *, offset: Optional[int] = None, origin: int = 0
+            self, readable: PackReadable, *, offset: Optional[int] = None, origin: int = 0
     ) -> Tuple[int, T]:
-        raise PrettyNotImplementedError(self, self.pack_into)
+        raise PrettyNotImplementedError(self, self.unpack_from)
 
 
 class PackableABC(Packable[T], TypeDefSizable, TypeDefAlignable, ABC):
@@ -203,12 +234,12 @@ class PackableABC(Packable[T], TypeDefSizable, TypeDefAlignable, ABC):
     """
 
     def pack_into(
-        self,
-        writable: PackWritable,
-        arg: T,
-        *,
-        offset: Optional[int] = None,
-        origin: int = 0
+            self,
+            writable: PackWritable,
+            arg: T,
+            *,
+            offset: Optional[int] = None,
+            origin: int = 0
     ) -> int:
         if isinstance(writable, WritableBuffer):
             return self._pack_buffer(writable, arg, offset=offset or 0, origin=origin)
@@ -220,7 +251,7 @@ class PackableABC(Packable[T], TypeDefSizable, TypeDefAlignable, ABC):
             return self._pack_stream(writable, arg, origin=origin)
 
     def unpack_from(
-        self, readable: PackReadable, *, offset: Optional[int] = None, origin: int = 0
+            self, readable: PackReadable, *, offset: Optional[int] = None, origin: int = 0
     ) -> Tuple[int, T]:
         if isinstance(readable, ReadableBuffer):
             return self._unpack_buffer(readable, offset=offset or 0, origin=origin)
@@ -232,14 +263,14 @@ class PackableABC(Packable[T], TypeDefSizable, TypeDefAlignable, ABC):
             return self._unpack_stream(readable, origin=origin)
 
     def _pack_buffer(
-        self, buffer: WritableBuffer, arg: T, *, offset: int = 0, origin: int = 0
+            self, buffer: WritableBuffer, arg: T, *, offset: int = 0, origin: int = 0
     ) -> int:
         packed = self.pack(arg)
         alignment = align_of(self)
         return bufferio.write(buffer, packed, alignment, offset, origin)
 
     def _unpack_buffer(
-        self, buffer: ReadableBuffer, *, offset: int = 0, origin: int = 0
+            self, buffer: ReadableBuffer, *, offset: int = 0, origin: int = 0
     ) -> Tuple[int, T]:
         size = size_of(self)
         alignment = align_of(self)
@@ -253,7 +284,7 @@ class PackableABC(Packable[T], TypeDefSizable, TypeDefAlignable, ABC):
         return streamio.write(stream, packed, alignment, origin)
 
     def _unpack_stream(
-        self, stream: ReadableStream, *, origin: int = 0
+            self, stream: ReadableStream, *, origin: int = 0
     ) -> Tuple[int, T]:
         size = size_of(self)
         alignment = align_of(self)

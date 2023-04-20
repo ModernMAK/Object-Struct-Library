@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from io import BytesIO
-from typing import Any, Union, Tuple, BinaryIO, Type
+from typing import Any, Union, Tuple, BinaryIO, Type, Optional
 
-from structlib.packing import PackableABC
+from structlib.packing import PackableABC, ConstPackable
 
 from structlib.typedef import (
     TypeDefAlignableABC,
@@ -48,10 +48,50 @@ def _combined_size(*types: TypeDefSizableAndAlignable):
     return size
 
 
+def _is_const(t):  # func to garuntee all checks are consistent
+    return hasattr(t, "__typedef_const_packable__")
+
+
+def _struct_zip(args, typedefs, *, expected_args: Optional[int] = None):
+    if expected_args is not None and len(args) != expected_args:
+        raise NotImplementedError  # TODO
+
+    _args = iter(args)
+    for typedef in typedefs:
+        if _is_const(typedef):
+            yield None, typedef, True
+        else:
+            yield next(_args), typedef, False
+
+
 class Struct(PackableABC[Tuple], TypeDefSizableABC, TypeDefAlignableABC):
     @property
     def __typedef_annotation__(self) -> Type:
         return Tuple
+
+    def _fixed_pack(self, args):
+        written = 0
+        buffer = bytearray(size_of(self))
+        for arg, t, const in _struct_zip(args, self._types):
+            packed = t.pack(arg) if not const else t.pack()
+            # TODO; check if this fails when t is Struct because Tuple/List is wrapped
+            written += bufferio.write(
+                buffer, packed, align_of(t), written, origin=0
+            )
+        return buffer
+
+    def _var_pack(self, args):
+        with BytesIO() as stream:
+            for arg, t, const in _struct_zip(args, self._types):
+                packed = t.pack(arg) if not const else t.pack()
+                # TODO; check if this fails when t is Struct because Tuple/List is wrapped
+                streamio.write(stream, packed, align_of(t), origin=0)
+            suffix_padding = bufferio.create_padding_buffer(
+                calculate_padding(align_of(self), stream.tell())
+            )
+            stream.write(suffix_padding)
+            stream.seek(0)
+            return stream.read()
 
     def pack(self, args: Tuple) -> bytes:
         # TODO; packed result does not account for struct alignment
@@ -59,69 +99,36 @@ class Struct(PackableABC[Tuple], TypeDefSizableABC, TypeDefAlignableABC):
         #   THIS ONLY HAPPENS FOR NON-FIXED STRUCTURES!
 
         if self._fixed_size:
-            written = 0
-            buffer = bytearray(size_of(self))
-            for arg, t in zip(args, self._types):
-                packed = t.pack(arg)
-                # TODO; check if this fails when t is Struct because Tuple/List is wrapped
-                written += bufferio.write(
-                    buffer, packed, align_of(t), written, origin=0
-                )
-            return buffer
+            return self._fixed_pack(args)
         else:
-            with BytesIO() as stream:
-                for arg, t in zip(args, self._types):
-                    packed = t.pack(arg)
-                    # TODO; check if this fails when t is Struct because Tuple/List is wrapped
-                    streamio.write(stream, packed, align_of(t), origin=0)
-                suffix_padding = bufferio.create_padding_buffer(
-                    calculate_padding(align_of(self), stream.tell())
-                )
-                stream.write(suffix_padding)
-                stream.seek(0)
-                return stream.read()
+            return self._var_pack(args)
 
     def unpack(self, buffer: bytes) -> Tuple:
         total_read = 0
         results = []
         for t in self._types:
             read, result = t.unpack_from(buffer, offset=total_read, origin=0)
-            results.append(result)
+            if not _is_const(t):
+                results.append(result)
             total_read += read
         return tuple(results)
 
     def _pack_buffer(
-        self, buffer: WritableBuffer, args: Tuple, *, offset: int = 0, origin: int = 0
+            self, buffer: WritableBuffer, args: Tuple, *, offset: int = 0, origin: int = 0
     ) -> int:
         packed = self.pack(args)
         alignment = align_of(self)
         return bufferio.write(buffer, packed, alignment, offset, origin)
-
-    def prim_unpack_buffer(
-        self, buffer: ReadableBuffer, *, offset: int, origin: int
-    ) -> Tuple[int, Tuple]:
-        size = size_of(self)
-        alignment = align_of(self)
-        read, packed = bufferio.read(buffer, size, alignment, offset, origin)
-        unpacked = self.unpack(packed)
-        return read, unpacked
 
     def _pack_stream(self, stream: BinaryIO, *args: Any, origin: int) -> int:
         packed = self.pack(*args)
         alignment = align_of(self)
         return streamio.write(stream, packed, alignment, origin)
 
-    def prim_unpack_stream(self, stream: BinaryIO, *, origin: int) -> Tuple[int, Tuple]:
-        size = size_of(self)
-        alignment = align_of(self)
-        read, packed = streamio.read(stream, size, alignment, origin)
-        unpacked = self.prim_unpack(packed)
-        return read, unpacked
-
     def __init__(
-        self,
-        *types: Union[AnyPackableTypeDef, AnyPackableTypeDef],
-        alignment: int = None,
+            self,
+            *types: Union[AnyPackableTypeDef, AnyPackableTypeDef],
+            alignment: int = None,
     ):
         if alignment is None:
             alignment = _max_align_of(*types)
@@ -146,8 +153,8 @@ class Struct(PackableABC[Tuple], TypeDefSizableABC, TypeDefAlignableABC):
             return True
         elif isinstance(other, Struct):
             return (
-                self._fixed_size == other._fixed_size
-                and self.__typedef_alignment__ == other.__typedef_alignment__
-                and self.__typedef_native_size__ == other.__typedef_native_size__
-                and self._types == other._types
+                    self._fixed_size == other._fixed_size
+                    and self.__typedef_alignment__ == other.__typedef_alignment__
+                    and self.__typedef_native_size__ == other.__typedef_native_size__
+                    and self._types == other._types
             )

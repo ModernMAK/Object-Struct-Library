@@ -50,7 +50,7 @@ class StringBuffer(
 
     def iter_unpack(self, buffer: bytes, iter_count: int) -> Tuple[str, ...]:
         size = size_of(self)
-        partials = [buffer[i * size : (i + 1) * size] for i in range(iter_count)]
+        partials = [buffer[i * size: (i + 1) * size] for i in range(iter_count)]
         unpacked = [self.unpack(partial) for partial in partials]
         return tuple(unpacked)
 
@@ -67,15 +67,68 @@ class StringBuffer(
             return True
         elif isinstance(other, StringBuffer):
             return (
-                self.__typedef_alignment__ == other.__typedef_alignment__
-                and self.__typedef_native_size__ == other.__typedef_native_size__
-                and self._encoding == other._encoding
+                    self.__typedef_alignment__ == other.__typedef_alignment__
+                    and self.__typedef_native_size__ == other.__typedef_native_size__
+                    and self._encoding == other._encoding
             )
         else:
             return False
 
     def __str__(self):
         name = f"String [{size_of(self)}] ({self._encoding})"
+        alignment = align_of(self)
+        align_str = f" @ {alignment}" if alignment != 1 else ""
+        return f"{name}{align_str}"
+
+    def __repr__(self):
+        return auto_pretty_repr(self)
+
+
+class ByteBuffer(
+    PackableABC,
+    # IterPackableABC,
+    TypeDefSizableABC, TypeDefAlignableABC
+):
+    """
+    Represents a fixed-buffer byte array.
+    """
+
+    # When packing; the bytes will be padded to fill the buffer
+    # When unpacking; padding is preserved
+
+    @property
+    def __typedef_annotation__(self) -> Type:
+        return bytes
+
+    def pack(self, arg: bytes) -> bytes:
+        size = size_of(self)
+        if len(arg) != size:
+            raise NotImplementedError
+        return arg
+
+    def unpack(self, buffer: bytes) -> bytes:
+        if len(buffer) != size_of(self):
+            raise NotImplementedError
+        return buffer
+
+    def __init__(self, size: int, *, alignment: int = None):
+        alignment = default_if_none(alignment, 1)
+        TypeDefSizableABC.__init__(self, size)
+        TypeDefAlignableABC.__init__(self, alignment)
+
+    def __eq__(self, other):
+        if self is other:
+            return True
+        elif isinstance(other, ByteBuffer):
+            return (
+                self.__typedef_alignment__ == other.__typedef_alignment__
+                and self.__typedef_native_size__ == other.__typedef_native_size__
+            )
+        else:
+            return False
+
+    def __str__(self):
+        name = f"Bytes [{size_of(self)}]"
         alignment = align_of(self)
         align_str = f" @ {alignment}" if alignment != 1 else ""
         return f"{name}{align_str}"
@@ -105,12 +158,12 @@ class PascalString(LengthPrefixedTypeABC):
     _DEFAULT_ENCODING = "ascii"
 
     def __init__(
-        self,
-        size_type: IntegerDefinition,
-        encoding: str = None,
-        *,
-        alignment: int = None,
-        block_size: int = None,
+            self,
+            size_type: IntegerDefinition,
+            encoding: str = None,
+            *,
+            alignment: int = None,
+            block_size: int = None,
     ):
         super().__init__(size_type, alignment, block_size)
         self._encoding = default_if_none(encoding, self._DEFAULT_ENCODING)
@@ -120,8 +173,8 @@ class PascalString(LengthPrefixedTypeABC):
             return True
         elif isinstance(other, PascalString):
             return (
-                self.__typedef_alignment__ == other.__typedef_alignment__
-                and self._encoding == other._encoding
+                    self.__typedef_alignment__ == other.__typedef_alignment__
+                    and self._encoding == other._encoding
             )
         else:
             return False

@@ -20,12 +20,12 @@ def _get_globals(klass):
 
 #
 def _create_func(
-    name,
-    arguments: List[str],
-    body: List[str],
-    rtype: Optional[str] = "",
-    globals: Optional[Dict] = None,
-    locals=None,
+        name,
+        arguments: List[str],
+        body: List[str],
+        rtype: Optional[str] = "",
+        globals: Optional[Dict] = None,
+        locals=None,
 ):
     locals = locals or {}
     return_def = f" -> {rtype}" if rtype != "" else ""
@@ -85,7 +85,7 @@ def _datastruct_tuplify(dclass, globals: Optional[Dict] = None) -> Tuple[str, Ca
     RTYPE = "Tuple"
     _self_arg = "self"
     ARGS = [_self_arg]
-    _arg_parts = [f"self.{f.name}" for f in dataclasses.fields(dclass)]
+    _arg_parts = [f"self.{f.name}" for f in dataclasses.fields(dclass) if f.init]
     _result_line = f"return ({', '.join(_arg_parts)})"
     BODY = [_result_line]
     return NAME, _create_func(NAME, ARGS, BODY, RTYPE, globals=globals, locals=locals)
@@ -199,12 +199,12 @@ class _DatastructPackable:
 
     @staticmethod
     def pack_into_cls(
-        cls,
-        writable: PackWritable,
-        arg: T,
-        *,
-        offset: Optional[int] = None,
-        origin: int = 0,
+            cls,
+            writable: PackWritable,
+            arg: T,
+            *,
+            offset: Optional[int] = None,
+            origin: int = 0,
     ):
         struct_args = getattr(arg, _datastruct_tuplify_name)()
         return cls._struct.pack_into(
@@ -213,12 +213,12 @@ class _DatastructPackable:
 
     @staticmethod
     def pack_into(
-        self,
-        writable: PackWritable,
-        arg: NoneType = None,
-        *,
-        offset: Optional[int] = None,
-        origin: int = 0,
+            self,
+            writable: PackWritable,
+            arg: NoneType = None,
+            *,
+            offset: Optional[int] = None,
+            origin: int = 0,
     ):
         if arg is not None:
             raise NotImplementedError
@@ -229,7 +229,7 @@ class _DatastructPackable:
 
     @staticmethod
     def unpack_from(
-        cls, readable: PackReadable, *, offset: Optional[int] = None, origin: int = 0
+            cls, readable: PackReadable, *, offset: Optional[int] = None, origin: int = 0
     ) -> Tuple[int, T]:
         read, args = cls._struct.unpack_from(readable, offset=offset, origin=origin)
         return read, cls(*args)
@@ -263,7 +263,7 @@ class _EnumstructPackable:
 
     @staticmethod
     def pack_cls(cls, arg: T):
-        enum_arg = arg.value
+        enum_arg = arg.value if hasattr(arg, "value") else arg  # hack to allow Numerics in place of enums
         return cls._struct.pack(enum_arg)
 
     @staticmethod
@@ -285,24 +285,24 @@ class _EnumstructPackable:
 
     @staticmethod
     def pack_into_cls(
-        cls,
-        writable: PackWritable,
-        arg: T,
-        *,
-        offset: Optional[int] = None,
-        origin: int = 0,
+            cls,
+            writable: PackWritable,
+            arg: T,
+            *,
+            offset: Optional[int] = None,
+            origin: int = 0,
     ):
         enum_arg = arg.value
         return cls._struct.pack_into(writable, enum_arg, offset=offset, origin=origin)
 
     @staticmethod
     def pack_into(
-        self,
-        writable: PackWritable,
-        arg: NoneType = None,
-        *,
-        offset: Optional[int] = None,
-        origin: int = 0,
+            self,
+            writable: PackWritable,
+            arg: NoneType = None,
+            *,
+            offset: Optional[int] = None,
+            origin: int = 0,
     ):
         if arg is not None:
             raise NotImplementedError
@@ -311,7 +311,7 @@ class _EnumstructPackable:
 
     @staticmethod
     def unpack_from(
-        cls, readable: PackReadable, *, offset: Optional[int] = None, origin: int = 0
+            cls, readable: PackReadable, *, offset: Optional[int] = None, origin: int = 0
     ) -> Tuple[int, T]:
         read, arg = cls._struct.unpack_from(readable, offset=offset, origin=origin)
         return read, cls(arg)
@@ -330,6 +330,21 @@ def datastruct(cls=None, /, alignment: int = None, **dataclass_kwargs):
     def construct_struct(types):
         return Struct(*types, alignment=alignment)
 
+    def enforce_consts(klass, annotations):
+        def _NULL_FIELD():
+            return dataclasses.field(init=False, repr=False, hash=False, compare=False)
+
+        for name, type in annotations.items():
+            if hasattr(type, "__typedef_const_packable__"):
+                attr = getattr(klass, name, None)
+                if not isinstance(attr, dataclasses.Field):
+                    if attr is not None:
+                        raise NotImplementedError
+                    setattr(klass, name, _NULL_FIELD())
+                else:
+                    if any([attr.init, attr.hash, attr.repr, attr.compare]):
+                        raise NotImplementedError
+
     def wrap(klass):
         _anno = klass._dstruct_annotations = (
             klass.__annotations__ if hasattr(klass, "__annotations__") else {}
@@ -338,6 +353,8 @@ def datastruct(cls=None, /, alignment: int = None, **dataclass_kwargs):
             name: resolve_annotation(type)
             for name, type in klass._dstruct_annotations.items()
         }
+
+        enforce_consts(klass, _resolved)  # ensures dclass automatically excludes const packables
         klass = dataclasses.dataclass(klass, **dataclass_kwargs)
         klass._struct = construct_struct(
             [t for t in klass._dstruct_annotations.values()]
