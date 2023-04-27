@@ -52,7 +52,7 @@ class TypeDefAlignable(Protocol):
 
     @abstractmethod
     def __typedef_align_as__(self: T, alignment: int) -> T:
-        raise PrettyNotImplementedError(self, self.__typedef_align_as__)
+        raise PrettyNotImplementedError(self, "__typedef_align_as__")
 
 
 class TypeDefAlignableABC(TypeDefAlignable):
@@ -78,12 +78,18 @@ class TypeDefSizable(Protocol, metaclass=AttrProtocolMeta):
     The type defines a native_size
     """
 
-    __typedef_native_size__: int
+    @property
+    def __typedef_native_size__(self) -> int:
+        raise PrettyNotImplementedError(self, "__typedef_align_as__")
 
 
 class TypeDefSizableABC(TypeDefSizable):
     def __init__(self, native_size: int):
-        self.__typedef_native_size__ = native_size
+        self.__typedef_native_size = native_size
+
+    @property
+    def __typedef_native_size__(self) -> int:
+        return self.__typedef_native_size
 
 
 @runtime_checkable

@@ -1,14 +1,21 @@
 import itertools
+import random
 import struct
 from dataclasses import field, is_dataclass
 from enum import Enum, IntEnum, IntFlag
 from io import BytesIO
-from typing import List
+from typing import List, Optional
 
 import pytest
 
 from structlib.datastruct import enumstruct, datastruct
-from structlib.typedef import calculate_padding, align_of, native_size_of, annotation_of, size_of
+from structlib.typedef import (
+    calculate_padding,
+    align_of,
+    native_size_of,
+    annotation_of,
+    size_of,
+)
 from structlib.typedefs.integer import IntegerDefinition
 from structlib.typedefs.padding import PaddingDefinition, Const
 from structlib.typedefs.strings import ByteBuffer
@@ -135,6 +142,8 @@ class DDPixelFormat:
 
 
 _DDSHeader_SIZE = Const(UInt32, 124)
+_DDSHeader_RSV44 = PaddingDefinition(pad_size=44)
+_DDSHeader_RSV4 = PaddingDefinition(pad_size=4)
 
 
 @datastruct(alignment=1)
@@ -149,8 +158,10 @@ class DDSHeader:
     pitch_or_linear_size: UInt32
     depth: UInt32
     mipmap_count: UInt32
+    rsv_44: _DDSHeader_RSV44
     pixel_format: DDPixelFormat
     caps: DDSCaps
+    rsv_4: _DDSHeader_RSV4
     #
     # def to_args(self) -> Tuple:
     #     return self.size, self.flags.value, self.height, self.width, self.pitch_or_linear_size, self.depth, self.mipmap_count, self.pixel_format.pack(), self.caps.pack()
@@ -185,6 +196,7 @@ class DDSHeader:
 #         return cls(flags, fourcc, bit_count, r, g, b, a)
 #
 
+
 class DataStructTests:
     @classmethod
     def _emulate_pack(cls, _arg):
@@ -192,7 +204,7 @@ class DataStructTests:
 
     @classmethod
     def _emulate_nonaligned(
-            cls, _buffer: bytes, _origin: int, _offset: int, _alignment: int
+        cls, _buffer: bytes, _origin: int, _offset: int, _alignment: int
     ):
         aligned_offset = _offset + calculate_padding(_alignment, _offset)
         size = len(_buffer)
@@ -204,16 +216,27 @@ class DataStructTests:
         emu[start:end] = _buffer
         return (full_size - (_offset + _origin)), emu
 
-    def test_pack_self(self, typedef, arg):
+    def test_pack_self(self, typedef, arg, typedef_size):
+
         expected = self._emulate_pack(arg)
         inst = typedef(*arg)
         packed = inst.pack()
+
+        if typedef_size is not None:
+            assert len(expected) == typedef_size
+            assert len(packed) == typedef_size
+            # return  # For dynamically sized typedefs
         assert packed == expected
 
-    def test_pack_cls(self, typedef, arg):
+    def test_pack_cls(self, typedef, arg, typedef_size):
         expected = self._emulate_pack(arg)
         inst = typedef(*arg)
         packed = typedef.pack(inst)
+
+        if typedef_size is not None:
+            assert len(expected) == typedef_size
+            assert len(packed) == typedef_size
+
         assert packed == expected
 
     @staticmethod
@@ -299,8 +322,18 @@ class DataStructTests:
 
 
 def _pretty_ids(name_or_dclass, values):
+    from dataclasses import fields
+
     if is_dataclass(name_or_dclass):
-        return [str(name_or_dclass(*v) for v in values)]
+
+        def _gen():
+            _f = fields(name_or_dclass)
+            for v in values:
+                dclass = name_or_dclass(*v)
+                yield str(dclass)
+
+        return list(_gen())
+        # return [str(name_or_dclass(*v)) for v in values]
     else:
         return [f"({name_or_dclass}={str(v)})" for v in values]
 
@@ -336,15 +369,29 @@ def _iterflags(f: List):
 
         yield from _iterflags(subset)
 
+
 def _flagprod(t):
     f = _enum2list(t)
     return _iterflags(f)
 
 
-DDCAPS_ARGS = list(all_flag_combinations([DDCaps.COMPLEX, DDCaps.TEXTURE, DDCaps.MIPMAP]))
-DDCAPS2_ARGS = list(all_flag_combinations(
-    [DDCaps2.CUBEMAP, DDCaps2.VOLUME, DDCaps2.CUBEMAP_NEG_X, DDCaps2.CUBEMAP_POS_X, DDCaps2.CUBEMAP_NEG_Y,
-     DDCaps2.CUBEMAP_POS_Y, DDCaps2.CUBEMAP_NEG_Z, DDCaps2.CUBEMAP_POS_Z]))
+DDCAPS_ARGS = list(
+    all_flag_combinations([DDCaps.COMPLEX, DDCaps.TEXTURE, DDCaps.MIPMAP])
+)
+DDCAPS2_ARGS = list(
+    all_flag_combinations(
+        [
+            DDCaps2.CUBEMAP,
+            DDCaps2.VOLUME,
+            DDCaps2.CUBEMAP_NEG_X,
+            DDCaps2.CUBEMAP_POS_X,
+            DDCaps2.CUBEMAP_NEG_Y,
+            DDCaps2.CUBEMAP_POS_Y,
+            DDCaps2.CUBEMAP_NEG_Z,
+            DDCaps2.CUBEMAP_POS_Z,
+        ]
+    )
+)
 
 DDSCaps_ARGS = list(itertools.product(DDCAPS_ARGS, DDCAPS2_ARGS))
 DDSCAPS_ARGS_IDS = _pretty_ids(DDSCaps, DDSCaps_ARGS)
@@ -354,15 +401,17 @@ _OFFSETS = [0, 1, 2]
 _ORIGIN_IDS = _pretty_ids("Origin", _ORIGINS)
 _OFFSET_IDS = _pretty_ids("Offset", _OFFSETS)
 
-DDSD_ARGS = []
-_UINT32_RANGE = [0, 0xffffffff]
+DDSD_ARGS = list(_flagprod(DDSD))
+_UINT32_RANGE = [0, 0xFFFFFFFF]
 DDSHeader_HEIGHT_ARGS = _UINT32_RANGE
 DDSHeader_WIDTH_ARGS = _UINT32_RANGE
 DDSHeader_PoLSIZE_ARGS = _UINT32_RANGE
 DDSHeader_DEPTH_ARGS = _UINT32_RANGE
 DDSHeader_MIPMAP_ARGS = _UINT32_RANGE
 
-DDPF_ARGS = _flagprod(DDPF)#_iterflags([DDPF.ALPHA_PIXELS, DDPF.FOURCC, DDPF.RGB])
+DDPF_ARGS = list(
+    _flagprod(DDPF)
+)  # _iterflags([DDPF.ALPHA_PIXELS, DDPF.FOURCC, DDPF.RGB])
 DDSFourCC_ARGS = _enum2list(DDSFourCC)
 DDPixelFormat_BIT_COUNT_ARGS = _UINT32_RANGE
 DDPixelFormat_R_ARGS = _UINT32_RANGE
@@ -370,21 +419,98 @@ DDPixelFormat_G_ARGS = _UINT32_RANGE
 DDPixelFormat_B_ARGS = _UINT32_RANGE
 DDPixelFormat_A_ARGS = _UINT32_RANGE
 
+
+def _max_subset(f, v: int = 16, seed: Optional[int] = None):
+    try:
+        size = len(f)
+    except TypeError:
+        size = v
+
+    if size > v:
+        if seed is not None:
+            random.seed(seed)
+        return random.sample(f, v)
+    else:
+        return f
+
+
 DDPixelFormat_ARGS = list(
-    itertools.product(DDPF_ARGS, DDSFourCC_ARGS, DDPixelFormat_BIT_COUNT_ARGS, DDPixelFormat_R_ARGS,
-                      DDPixelFormat_G_ARGS, DDPixelFormat_B_ARGS, DDPixelFormat_A_ARGS))
+    itertools.product(
+        DDPF_ARGS,
+        DDSFourCC_ARGS,
+        DDPixelFormat_BIT_COUNT_ARGS,
+        DDPixelFormat_R_ARGS,
+        DDPixelFormat_G_ARGS,
+        DDPixelFormat_B_ARGS,
+        DDPixelFormat_A_ARGS,
+    )
+)
 
-DDSHeader_ARGS = list(itertools.product(DDSD_ARGS, DDSHeader_HEIGHT_ARGS, DDSHeader_WIDTH_ARGS, DDSHeader_PoLSIZE_ARGS,
-                                        DDSHeader_DEPTH_ARGS, DDSHeader_MIPMAP_ARGS, DDPixelFormat_ARGS, DDSCaps_ARGS))
+DDPixelFormat_OBJS = [DDPixelFormat(*args) for args in DDPixelFormat_ARGS]
+DDSCaps_OBJS = [DDSCaps(*args) for args in DDSCaps_ARGS]
 
-DDSHeader_IDS = _pretty_ids(DDSHeader,DDSHeader_ARGS)
+random.seed(0xDEADBEEF)
+DDSHeader_ARGS = list(
+    itertools.product(
+        _max_subset(DDSD_ARGS, 2),
+        _max_subset(DDSHeader_HEIGHT_ARGS, 2),
+        _max_subset(DDSHeader_WIDTH_ARGS, 2),
+        _max_subset(DDSHeader_PoLSIZE_ARGS, 2),
+        _max_subset(DDSHeader_DEPTH_ARGS, 2),
+        _max_subset(DDSHeader_MIPMAP_ARGS, 2),
+        _max_subset(DDPixelFormat_OBJS, 2),
+        _max_subset(DDSCaps_OBJS, 2),
+    )
+)
+
+DDSHeader_IDS = _pretty_ids(DDSHeader, DDSHeader_ARGS)
+
 
 class TestDDSHeader(DataStructTests):
     _s = struct.Struct("<7I 44x 32s 16s 4x")
+    _sPF = struct.Struct("<2I 4s 5I")
+    _sC = struct.Struct("<2I 8x")
+
+    @classmethod
+    def _emulate_pack_pf(cls, _arg :DDPixelFormat):
+        SIZE = 32
+        return _arg.pack()
+        # true_args = [v.value if hasattr(v, "value") else v for v in _arg]
+        # true_args = (_arg)
+        # return cls._sPF.pack(SIZE, _arg)
+
+    @classmethod
+    def _emulate_pack_caps(cls, _arg):
+        return _arg.pack()
+        # true_args = [v.value if hasattr(v, "value") else v for v in _arg]
+        # return cls._sC.pack(*true_args)
 
     @classmethod
     def _emulate_pack(cls, _arg):
-        true_args = [a.value if hasattr(a, "value") else a for a in _arg]
+        SIZE = 124
+        (
+            flags,
+            height,
+            width,
+            pitch_or_linear_size,
+            depth,
+            mipmap_count,
+            pixel_format,
+            caps,
+        ) = _arg
+        pixel_format = cls._emulate_pack_pf(pixel_format)
+        caps = cls._emulate_pack_caps(caps)
+        true_args = (
+            SIZE,
+            flags,
+            height,
+            width,
+            pitch_or_linear_size,
+            depth,
+            mipmap_count,
+            pixel_format,
+            caps,
+        )
         return cls._s.pack(*true_args)
 
     @pytest.fixture
@@ -401,11 +527,11 @@ class TestDDSHeader(DataStructTests):
 
     @pytest.fixture
     def typedef_native_size(self):
-        return 16
+        return 124
 
     @pytest.fixture
     def typedef_size(self):
-        return 16
+        return 124
 
     @pytest.fixture(params=_OFFSETS, ids=_OFFSET_IDS)
     def offset(self, request):

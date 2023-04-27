@@ -2,7 +2,7 @@ from typing import Generic, Union, Type
 
 from structlib.packing import ConstPackableABC, Packable
 from structlib.typedef import TypeDefAnnotated, TypeDefAlignableABC, TypeDefSizableABC, TypeDefSizable, \
-    TypeDefAlignable, T, align_as, annotation_of, align_of
+    TypeDefAlignable, T, align_as, annotation_of, align_of, native_size_of
 
 
 class PaddingDefinition(ConstPackableABC, TypeDefSizableABC, TypeDefAlignableABC, TypeDefAnnotated):
@@ -48,6 +48,11 @@ class ConstDefinition(ConstPackableABC, TypeDefSizable, TypeDefAlignable, TypeDe
     @property
     def __typedef_alignment__(self) -> int:
         return align_of(self._backing)
+
+
+    @property
+    def __typedef_native_size__(self) -> int:
+        return native_size_of(self._backing)
 
 
 def Const(typedef, value) -> ConstDefinition:

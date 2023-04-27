@@ -267,16 +267,16 @@ class _EnumstructPackable:
         return cls._struct.pack(enum_arg)
 
     @staticmethod
-    def __typedef_annotation__(self):
-        return self.__class__
+    def __typedef_annotation__(cls):
+        return cls
 
     @staticmethod
-    def __typedef_alignment__(self):
-        return self._struct.__typedef_alignment__
+    def __typedef_alignment__(cls):
+        return cls._struct.__typedef_alignment__
 
     @staticmethod
-    def __typedef_native_size__(self):
-        return self._struct.__typedef_native_size__
+    def __typedef_native_size__(cls):
+        return cls._struct.__typedef_native_size__
 
     @staticmethod
     def unpack(cls, buffer: bytes) -> T:
@@ -323,6 +323,9 @@ class _EnumstructPackable:
         )
 
 
+def _is_const(t):  # func to garuntee all checks are consistent
+    return hasattr(t, "__typedef_const_packable__")
+
 def datastruct(cls=None, /, alignment: int = None, **dataclass_kwargs):
     def resolve_annotation(t):
         return t.__typedef_annotation__ if isinstance(t, TypeDefAnnotated) else t
@@ -335,7 +338,7 @@ def datastruct(cls=None, /, alignment: int = None, **dataclass_kwargs):
             return dataclasses.field(init=False, repr=False, hash=False, compare=False)
 
         for name, type in annotations.items():
-            if hasattr(type, "__typedef_const_packable__"):
+            if _is_const(type):
                 attr = getattr(klass, name, None)
                 if not isinstance(attr, dataclasses.Field):
                     if attr is not None:
@@ -354,7 +357,7 @@ def datastruct(cls=None, /, alignment: int = None, **dataclass_kwargs):
             for name, type in klass._dstruct_annotations.items()
         }
 
-        enforce_consts(klass, _resolved)  # ensures dclass automatically excludes const packables
+        enforce_consts(klass, _anno)  # ensures dclass automatically excludes const packables
         klass = dataclasses.dataclass(klass, **dataclass_kwargs)
         klass._struct = construct_struct(
             [t for t in klass._dstruct_annotations.values()]
