@@ -3,7 +3,7 @@ from typing import List, Union, Type, Any, Tuple
 
 from structlib.packing import (
     PackableABC,
-    IterPackableABC,
+    IterPackableABC, Packable,
     # _pack_buffer,
     # _unpack_buffer,
     # iter_pack,
@@ -15,8 +15,6 @@ from structlib.typedef import (
 )
 from structlib.typedef import align_as, size_of, TypeDefByteOrder, byteorder_as
 from structlib.utils import pretty_repr
-
-AnyPackableTypeDef = Any  # TODO
 
 
 class FixedCollection(
@@ -55,14 +53,14 @@ class FixedCollection(
             return self
 
     def __init__(
-        self, args: int, data_type: Union[Type[AnyPackableTypeDef], AnyPackableTypeDef]
+        self, args: int, data_type: Union[Type[Packable], Packable]
     ):
         self._backing = data_type
         self._args = args
 
     @classmethod
     def Unsized(
-        cls: T, data_type: Union[Type[AnyPackableTypeDef], AnyPackableTypeDef]
+        cls: T, data_type: Union[Type[Packable], Packable]
     ) -> T:
         """
         Helper, returns an 'unsized' Array

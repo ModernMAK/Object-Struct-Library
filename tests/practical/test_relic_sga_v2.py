@@ -1,6 +1,5 @@
 import itertools
-from dataclasses import astuple
-from enum import IntEnum
+from enum import IntEnum, Enum
 
 import pytest
 
@@ -8,7 +7,7 @@ from structlib.byteorder import ByteOrder
 from structlib.datastruct import datastruct, enumstruct
 from structlib.typedef import size_of
 from structlib.typedefs.integer import IntegerDefinition
-from structlib.typedefs.strings import StringBuffer, CStringBuffer
+from structlib.typedefs.strings import CStringBuffer
 from structlib.typedefs.structure import Struct
 
 _SGA_BOM: ByteOrder = "little"
@@ -21,7 +20,7 @@ _UInt16Max = (2 ** 16) - 1
 
 
 @enumstruct(backing_type=UInt32)
-class StorageType(IntEnum):
+class StorageType(Enum):
     None_ = 0
     Buffer = 16
     Stream = 32

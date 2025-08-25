@@ -201,7 +201,7 @@ class _EnumstructPackableMixin(Packable):
 
     def pack(cls, arg: Optional[T] = None) -> bytes:
         if isinstance(cls, type):  # class call
-            return arg._struct.pack(arg)
+            return cls._struct.pack(arg)
         else:
             if arg is not None:
                 raise NotImplementedError
