@@ -12,8 +12,13 @@ from structlib.typedefs.integer import IntegerDefinition
 from tests.typedefs.common_tests import (
     AlignmentTests,
 )
-from typedefs.common_tests import ByteorderTests, PackableTests, TypedefEqualityTests, TypedefInequalityTests, \
-    IOPackableTests
+from typedefs.common_tests import (
+    ByteorderTests,
+    PackableTests,
+    TypedefEqualityTests,
+    TypedefInequalityTests,
+    IOPackableTests,
+)
 
 _ALIGNMENTS = [1, 2, 4, 8]
 _BYTEORDERS = [BigEndian, LittleEndian]

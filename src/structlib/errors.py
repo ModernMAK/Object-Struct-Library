@@ -6,7 +6,10 @@ class StructError(Exception):
 
 
 def pretty_func_name(self, func):
-    return f"{self.__class__.__name__}.{func.__name__}"
+    if isinstance(func,str):
+        return f"{self.__qualname__}.{func}"
+    else:
+        return f"{self.__qualname__}.{func.__name__}"
 
 
 def PrettyNotImplementedError(self, func):

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from io import BytesIO
-from typing import Any, Union, Tuple, BinaryIO, Type
+from typing import Any, Union, Tuple, BinaryIO, Type, Optional
 
-from structlib.packing import PackableABC, Packable
+from structlib.packing import PackableABC, ConstPackable
 
 from structlib.typedef import (
     TypeDefAlignableABC,
@@ -17,6 +17,7 @@ from structlib.typedef import (
     calculate_padding,
 )
 from structlib import streamio, bufferio
+from structlib.typedefs.array import AnyPackableTypeDef
 from structlib.typeshed import WritableBuffer, ReadableBuffer
 
 
@@ -47,59 +48,68 @@ def _combined_size(*types: TypeDefSizableAndAlignable):
     return size
 
 
+def _is_const(t):  # func to garuntee all checks are consistent
+    return hasattr(t, "__typedef_const_packable__")
+
+
+def _struct_zip(args, typedefs, *, expected_args: Optional[int] = None):
+    if expected_args is not None and len(args) != expected_args:
+        raise NotImplementedError  # TODO
+
+    _args = iter(args)
+    for typedef in typedefs:
+        if _is_const(typedef):
+            yield None, typedef, True
+        else:
+            yield next(_args), typedef, False
+
+
 class Struct(PackableABC[Tuple], TypeDefSizableABC, TypeDefAlignableABC):
     @property
     def __typedef_annotation__(self) -> Type:
         return Tuple
 
+    def _fixed_pack(self, args):
+        written = 0
+        buffer = bytearray(size_of(self))
+        for arg, t, const in _struct_zip(args, self._types):
+            packed = t.pack(arg) if not const else t.pack()
+            # TODO; check if this fails when t is Struct because Tuple/List is wrapped
+            written += bufferio.write(
+                buffer, packed, align_of(t), written, origin=0
+            )
+        return buffer
+
+    def _var_pack(self, args):
+        with BytesIO() as stream:
+            for arg, t, const in _struct_zip(args, self._types):
+                packed = t.pack(arg) if not const else t.pack()
+                # TODO; check if this fails when t is Struct because Tuple/List is wrapped
+                streamio.write(stream, packed, align_of(t), origin=0)
+            suffix_padding = bufferio.create_padding_buffer(
+                calculate_padding(align_of(self), stream.tell())
+            )
+            stream.write(suffix_padding)
+            stream.seek(0)
+            return stream.read()
 
     def pack(self, args: Tuple) -> bytes:
         # TODO; packed result does not account for struct alignment
         #   EG. if the data is packed into 13 bytes, with an alignment of 4 on the struct, we should pad to 16 bytes
         #   THIS ONLY HAPPENS FOR NON-FIXED STRUCTURES!
-        def _pack(t_, arg_):
-            if isinstance(t_, type):
-                return t_.pack(t_, arg_)
-            else:
-                return t_.pack(arg_)
 
         if self._fixed_size:
-            written = 0
-            buffer = bytearray(size_of(self))
-            for arg, t in zip(args, self._types):
-                # packed = t.pack(arg=arg)
-                packed = _pack(t, arg)
-                # TODO; check if this fails when t is Struct because Tuple/List is wrapped
-                written += bufferio.write(
-                    buffer, packed, align_of(t), written, origin=0
-                )
-            return buffer
+            return self._fixed_pack(args)
         else:
-            with BytesIO() as stream:
-                for arg, t in zip(args, self._types):
-                    # packed = t.pack(arg)
-                    packed = _pack(t, arg)
-                    # TODO; check if this fails when t is Struct because Tuple/List is wrapped
-                    streamio.write(stream, packed, align_of(t), origin=0)
-                suffix_padding = bufferio.create_padding_buffer(
-                    calculate_padding(align_of(self), stream.tell())
-                )
-                stream.write(suffix_padding)
-                stream.seek(0)
-                return stream.read()
+            return self._var_pack(args)
 
     def unpack(self, buffer: bytes) -> Tuple:
-        def _unpack(t_, *args,**kwargs):
-            if isinstance(t_, type):
-                return t_.unpack_from(t_, *args,**kwargs)
-            else:
-                return t_.unpack_from(*args,**kwargs)
-
         total_read = 0
         results = []
         for t in self._types:
-            read, result = _unpack(t,  buffer, offset=total_read, origin=0)
-            results.append(result)
+            read, result = t.unpack_from(buffer, offset=total_read, origin=0)
+            if not _is_const(t):
+                results.append(result)
             total_read += read
         return tuple(results)
 
@@ -110,16 +120,14 @@ class Struct(PackableABC[Tuple], TypeDefSizableABC, TypeDefAlignableABC):
         alignment = align_of(self)
         return bufferio.write(buffer, packed, alignment, offset, origin)
 
-
     def _pack_stream(self, stream: BinaryIO, *args: Any, origin: int) -> int:
         packed = self.pack(*args)
         alignment = align_of(self)
         return streamio.write(stream, packed, alignment, origin)
 
-
     def __init__(
             self,
-            *types: Union[Packable, Type[Packable]],
+            *types: Union[AnyPackableTypeDef, AnyPackableTypeDef],
             alignment: int = None,
     ):
         if alignment is None:

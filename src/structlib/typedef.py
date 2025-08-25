@@ -25,18 +25,18 @@ class AttrProtocolMeta(_ProtocolMeta):
         # We need this method for situations where attributes are
         # assigned in __init__.
         if (
-            not getattr(cls, "_is_protocol", False) or _is_callable_members_only(cls)
+                not getattr(cls, "_is_protocol", False) or _is_callable_members_only(cls)
         ) and issubclass(instance.__class__, cls):
             return True
         if cls._is_protocol:
             if all(
-                hasattr(instance, attr) and
-                # All *methods* can be blocked by setting them to None.
-                (
-                    not callable(getattr(cls, attr, None))
-                    or getattr(instance, attr) is not None
-                )
-                for attr in _get_protocol_attrs(cls)
+                    hasattr(instance, attr) and
+                    # All *methods* can be blocked by setting them to None.
+                    (
+                            not callable(getattr(cls, attr, None))
+                            or getattr(instance, attr) is not None
+                    )
+                    for attr in _get_protocol_attrs(cls)
             ):
                 return True
             else:
@@ -45,16 +45,23 @@ class AttrProtocolMeta(_ProtocolMeta):
 
 @runtime_checkable
 class TypeDefAlignable(Protocol):
-    __typedef_alignment__: int
+
+    @property
+    def __typedef_alignment__(self) -> int:
+        raise PrettyNotImplementedError(self, "__typedef_alignment__")
 
     @abstractmethod
     def __typedef_align_as__(self: T, alignment: int) -> T:
-        raise PrettyNotImplementedError(self, self.__typedef_align_as__)
+        raise PrettyNotImplementedError(self, "__typedef_align_as__")
 
 
 class TypeDefAlignableABC(TypeDefAlignable):
     def __init__(self, alignment: int):
-        self.__typedef_alignment__ = alignment
+        self.__typedef_alignment = alignment
+
+    @property
+    def __typedef_alignment__(self) -> int:
+        return self.__typedef_alignment
 
     def __typedef_align_as__(self: T, alignment: int) -> T:
         if self.__typedef_alignment__ == alignment:
@@ -71,26 +78,38 @@ class TypeDefSizable(Protocol, metaclass=AttrProtocolMeta):
     The type defines a native_size
     """
 
-    __typedef_native_size__: int
+    @property
+    def __typedef_native_size__(self) -> int:
+        raise PrettyNotImplementedError(self, "__typedef_align_as__")
 
 
 class TypeDefSizableABC(TypeDefSizable):
     def __init__(self, native_size: int):
-        self.__typedef_native_size__ = native_size
+        self.__typedef_native_size = native_size
+
+    @property
+    def __typedef_native_size__(self) -> int:
+        return self.__typedef_native_size
 
 
 @runtime_checkable
 class TypeDefByteOrder(Protocol):
-    __typedef_byteorder__: ByteOrder
+    @property
+    def __typedef_byteorder__(self) -> ByteOrder:
+        raise PrettyNotImplementedError(self, "__typedef_byteorder__")
 
     @abstractmethod
     def __typedef_byteorder_as__(self: T, byteorder: ByteOrder) -> T:
-        raise PrettyNotImplementedError(self, self.__typedef_byteorder_as__)
+        raise PrettyNotImplementedError(self, "__typedef_byteorder_as__")
 
 
 class TypeDefByteOrderABC(TypeDefByteOrder):
     def __init__(self, byteorder: ByteOrder):
-        self.__typedef_byteorder__ = byteorder
+        self.__typedef_byteorder = byteorder
+
+    @property
+    def __typedef_byteorder__(self) -> ByteOrder:
+        return self.__typedef_byteorder
 
     def __typedef_byteorder_as__(self: T, byteorder: ByteOrder) -> T:
         if self.__typedef_byteorder__ == byteorder:
@@ -109,13 +128,17 @@ class TypeDefAnnotated(Protocol, metaclass=AttrProtocolMeta):
 
     @property
     def __typedef_annotation__(self) -> Type:
-        raise PrettyNotImplementedError(self, self.__typedef_annotation__)
+        raise PrettyNotImplementedError(self, "__typedef_annotation__")
+
+
+def annotation_of(typedef: TypeDefAnnotated) -> Type:
+    return typedef.__typedef_annotation__
 
 
 def native_size_of(typedef: TypeDefSizable):
     # TODO ~ FIX HACK
-    native_size =  typedef.__typedef_native_size__
-    if isinstance(native_size,property):
+    native_size = typedef.__typedef_native_size__
+    if isinstance(native_size, property):
         native_size = native_size.fget(typedef)
     return native_size
 

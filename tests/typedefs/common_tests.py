@@ -3,7 +3,14 @@ from io import BytesIO
 from structlib import bufferio
 from structlib.byteorder import ByteOrder, resolve_byteorder
 from structlib.packing import Packable
-from structlib.typedef import TypeDefAlignable, align_as, align_of, TypeDefByteOrder, byteorder_as, byteorder_of
+from structlib.typedef import (
+    TypeDefAlignable,
+    align_as,
+    align_of,
+    TypeDefByteOrder,
+    byteorder_as,
+    byteorder_of,
+)
 
 
 class AlignmentTests:

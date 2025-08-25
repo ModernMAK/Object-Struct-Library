@@ -3,6 +3,7 @@ from typing import List, Literal, Any
 
 import structlib.packing
 from tests import rng
+
 # from tests.typedefs.common_tests import (
 #     AlignmentTests,
 #     # PrimitiveTests,
